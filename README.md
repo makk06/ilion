@@ -3,7 +3,7 @@
 한국관광공사 API를 활용하는 **실시간 혼잡도 기반 장소 추천 앱**입니다.
 
 - 프런트엔드: Flutter
-- 백엔드: 추후 확정
+- 백엔드: Django
 - GitHub: <https://github.com/makk06/ilion>
 - 상세 협업 규칙: [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md)
 
