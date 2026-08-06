@@ -3,7 +3,7 @@
 한국관광공사 API를 활용하는 **실시간 혼잡도 기반 장소 추천 앱**입니다.
 
 - 프런트엔드: Flutter
-- 백엔드: 추후 확정
+- 백엔드: Django
 - GitHub: <https://github.com/makk06/ilion>
 - 상세 협업 규칙: [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md)
 
@@ -38,6 +38,24 @@ flutter run -d chrome
 ```
 
 Windows에서는 iOS 앱을 실행할 수 없습니다. 우선 Chrome 또는 Android 기기로 확인합니다.
+
+## 백엔드 실행
+
+> 먼저 백엔드 폴더의 README.md를 따라 초기 설치 후 실행해야 합니다.
+
+```bash
+cd tourist_congestion_backend
+
+# 가상환경 진입 (Mac/Linux)
+source .venv/bin/activate
+
+# 가상환경 진입 (Windows)
+.venv\Scripts\activate
+
+# 서버 실행
+python manage.py migrate
+python manage.py runserver
+```
 
 ## 작업 시작 순서
 
