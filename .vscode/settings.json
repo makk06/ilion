@@ -1,3 +1,4 @@
 {
-    "java.compile.nullAnalysis.mode": "automatic"
+    "java.compile.nullAnalysis.mode": "automatic",
+    "idf.currentSetup": "C:\\Users\\poplo\\esp\\v5.5.2\\esp-idf"
 }
