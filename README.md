@@ -10,7 +10,7 @@
 ## 프로젝트 구조
 
 ```text
-ilion/
+2026_tourist_congestion_app/
 ├─ tourist_congestion_frontend/   # Flutter 앱
 ├─ tourist_congestion_backend/    # 백엔드 서버
 ├─ README.md                      # 프로젝트 첫 안내
