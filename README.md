@@ -39,6 +39,24 @@ flutter run -d chrome
 
 Windows에서는 iOS 앱을 실행할 수 없습니다. 우선 Chrome 또는 Android 기기로 확인합니다.
 
+## 백엔드 실행
+
+> 먼저 백엔드 폴더의 README.md를 따라 초기 설치 후 실행해야 합니다.
+
+```bash
+cd tourist_congestion_backend
+
+# 가상환경 진입 (Mac/Linux)
+source .venv/bin/activate
+
+# 가상환경 진입 (Windows)
+.venv\Scripts\activate
+
+# 서버 실행
+python manage.py migrate
+python manage.py runserver
+```
+
 ## 작업 시작 순서
 
 `main`에서 직접 개발하지 않고, 최신 `main`에서 기능별 브랜치를 만듭니다.

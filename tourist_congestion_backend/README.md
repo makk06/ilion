@@ -30,16 +30,6 @@ python manage.py runserver
 
 웹서버 관리자 계정은 `python manage.py createsuperuser`로 생성할 수 있습니다.
 
-## 샘플 API
-
-서버 상태는 `GET /healthz`로 확인합니다.
-
-```json
-{
-  "status": "ok"
-}
-```
-
 ## 실행 방법
 
 가상환경에 진입한 뒤 다음을 실행합니다.
@@ -52,3 +42,13 @@ python manage.py runserver
 서버가 실행되면 <http://127.0.0.1:8000/healthz>에서 API 응답을 확인할 수 있습니다.
 
 만약 `ModuleNotFoundError`가 뜬다면 `python -m pip install -r requirements.txt`를 입력한 뒤 서버를 재시작해보세요.
+
+## 샘플 API
+
+서버 상태는 `GET /healthz`로 확인합니다.
+
+```json
+{
+  "status": "ok"
+}
+```
