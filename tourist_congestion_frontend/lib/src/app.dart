@@ -10,7 +10,7 @@ class CrowdTripApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: '여유로',
+      title: '이리온',
       theme: AppTheme.light,
       home: const MainShell(),
     );
