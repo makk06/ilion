@@ -1,1 +1,5 @@
 Django==6.0.6
+djangorestframework==3.16.1
+djangorestframework-simplejwt==5.5.1
+google-auth==2.40.3
+requests==2.32.5
