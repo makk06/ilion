@@ -1,6 +1,8 @@
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 
+from places.models import Place
+
 from .managers import UserManager
 
 
@@ -47,3 +49,17 @@ class RefreshToken(models.Model):
 
     def __str__(self):
         return f'refresh token for user {self.user_id}'
+
+
+class Favorite(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='favorites')
+    place = models.ForeignKey(Place, on_delete=models.CASCADE, related_name='favorited_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'place'], name='unique_user_place_favorite'),
+        ]
+
+    def __str__(self):
+        return f'user {self.user_id} favorite of place {self.place_id}'

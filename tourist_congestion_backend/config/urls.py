@@ -22,5 +22,5 @@ from config.views import healthz
 urlpatterns = [
     path('healthz', healthz, name='healthz'),
     path('admin/', admin.site.urls),
-    path('api/auth/', include('users.urls')),
+    path('api/', include('users.urls')),
 ]
