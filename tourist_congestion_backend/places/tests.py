@@ -495,9 +495,9 @@ class SeedDevDataCommandTests(TestCase):
         self.assertEqual(Place.objects.count(), 10)
         self.assertEqual(PlaceSource.objects.count(), 10)
         self.assertEqual(PlaceInfo.objects.count(), 10)
-        self.assertEqual(CrowdArea.objects.count(), 2)
-        self.assertEqual(CrowdData.objects.count(), 2)
-        self.assertEqual(PlaceCrowdArea.objects.count(), 1)
+        self.assertEqual(CrowdArea.objects.count(), 3)
+        self.assertEqual(CrowdData.objects.count(), 3)
+        self.assertEqual(PlaceCrowdArea.objects.count(), 2)
         self.assertIn('places=10', first_output.getvalue())
         self.assertIn('places=10', second_output.getvalue())
 

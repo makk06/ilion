@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from django.db import transaction
 from django.utils import timezone
 
+from places.integrations.exceptions import ExternalAPIError
 from places.models import CrowdArea, CrowdData, ExternalSource
 
 
@@ -12,24 +13,34 @@ class SeoulCrowdSyncResult:
     areas_created: int = 0
     observations_created: int = 0
     observations_updated: int = 0
+    failed: int = 0
 
 
 class SeoulCrowdSyncService:
     def __init__(self, client):
         self.client = client
 
-    def sync(self, areas, *, dry_run=False):
+    def sync(self, areas, *, dry_run=False, continue_on_error=False):
         if dry_run:
             with transaction.atomic():
-                result = self._sync(areas)
+                result = self._sync(
+                    areas,
+                    continue_on_error=continue_on_error,
+                )
                 transaction.set_rollback(True)
                 return result
-        return self._sync(areas)
+        return self._sync(areas, continue_on_error=continue_on_error)
 
-    def _sync(self, areas):
+    def _sync(self, areas, *, continue_on_error):
         result = SeoulCrowdSyncResult()
         for area_selector in areas:
-            record = self.client.fetch_population(area_selector)
+            try:
+                record = self.client.fetch_population(area_selector)
+            except ExternalAPIError:
+                if not continue_on_error:
+                    raise
+                result.failed += 1
+                continue
             outcome = self._sync_record(record)
             result.areas_processed += 1
             result.areas_created += outcome['area_created']

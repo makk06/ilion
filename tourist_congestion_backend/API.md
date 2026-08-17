@@ -248,5 +248,57 @@ curl "http://127.0.0.1:8000/api/places/nearby?latitude=37.576031&longitude=126.9
 ```
 
 실제 API 데이터로 시연할 때는 `sync_tour_places`,
-`sync_tour_place_details`, `sync_seoul_crowd`, `map_place_crowd_area` 순서로
-적재·연결한 뒤 같은 조회 API를 사용합니다.
+`sync_tour_place_details`, `sync_seoul_crowd_catalog`,
+`apply_seoul_crowd_mappings` 순서로 적재·연결한 뒤 같은 조회 API를 사용합니다.
+
+## 서울 혼잡도 카탈로그 운영
+
+서울시 공식 121개 영역 중 초기 운영 대상 12개와 TourAPI 대표 장소 매핑 13개를
+버전 관리합니다.
+
+```text
+places/data/seoul_crowd_areas.json
+places/data/seoul_place_mappings.json
+```
+
+설정 파일에는 영역 코드와 매핑 규칙만 저장합니다. API에서 받은 실제 혼잡
+관측값과 로컬 SQLite 파일은 Git에 저장하지 않습니다. 서울시 API는 한 번에 한
+장소만 호출하므로 전체 카탈로그를 실행하면 12번 요청합니다.
+
+### 개발 환경
+
+```bash
+# 장소 10개, 혼잡 영역 3개, 검증된 매핑 2개 생성
+python manage.py seed_dev_data
+
+# 현재 DB에 적용 가능한 카탈로그 매핑을 적용하고 누락 현황 표시
+python manage.py apply_seoul_crowd_mappings
+
+# 12개 실제 호출을 시험하지만 DB에는 반영하지 않음
+python manage.py sync_seoul_crowd_catalog --dry-run
+```
+
+개발 시드는 경복궁과 광장시장만 카탈로그 매핑이 가능합니다. 출력되는 나머지
+`missing_places`, `missing_areas`는 개발 DB가 작아서 생기는 정상적인 차이입니다.
+
+### 스테이징·운영 환경
+
+```bash
+# 전국 장소가 적재된 뒤 선택한 12개 혼잡도를 저장
+python manage.py sync_seoul_crowd_catalog
+
+# TourAPI 외부 ID를 기준으로 장소-혼잡 영역 매핑 적용
+python manage.py apply_seoul_crowd_mappings
+```
+
+특정 영역만 점검하거나 호출 수를 제한할 수도 있습니다.
+
+```bash
+python manage.py sync_seoul_crowd_catalog \
+  --area-code POI008 --area-code POI060 --dry-run
+python manage.py sync_seoul_crowd_catalog --limit 3 --dry-run
+```
+
+일괄 수집은 한 영역이 실패해도 나머지 영역을 계속 처리한 뒤 실패 개수를 오류로
+반환합니다. 따라서 운영 스케줄러는 부분 성공 데이터를 보존하면서도 실패 알림을
+발생시킬 수 있습니다.

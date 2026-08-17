@@ -204,9 +204,18 @@ CROWD_AREA_ITEMS = (
         'population_min': 22000,
         'population_max': 24000,
     },
+    {
+        'external_id': 'POI060',
+        'name': '광장(전통)시장',
+        'crowd_level': 'crowded',
+        'crowd_message': '개발용 혼잡도 샘플입니다.',
+        'population_min': 26000,
+        'population_max': 28000,
+    },
 )
 
 
 PLACE_CROWD_AREA_MAPPINGS = (
     ('126508', 'POI008'),
+    ('132183', 'POI060'),
 )

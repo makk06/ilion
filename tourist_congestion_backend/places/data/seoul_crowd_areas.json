@@ -1,0 +1,18 @@
+{
+  "catalog_version": "2026-04-14",
+  "source_url": "https://data.seoul.go.kr/dataList/OA-21778/A/1/datasetView.do",
+  "areas": [
+    {"external_id": "POI008", "name": "경복궁", "category": "고궁·문화유산"},
+    {"external_id": "POI009", "name": "광화문·덕수궁", "category": "고궁·문화유산"},
+    {"external_id": "POI060", "name": "광장(전통)시장", "category": "발달상권"},
+    {"external_id": "POI066", "name": "북촌한옥마을", "category": "발달상권"},
+    {"external_id": "POI078", "name": "인사동", "category": "발달상권"},
+    {"external_id": "POI083", "name": "DDP(동대문디자인플라자)", "category": "발달상권"},
+    {"external_id": "POI088", "name": "광화문광장", "category": "공원"},
+    {"external_id": "POI089", "name": "국립중앙박물관·용산가족공원", "category": "공원"},
+    {"external_id": "POI101", "name": "서울숲공원", "category": "공원"},
+    {"external_id": "POI115", "name": "남대문시장", "category": "발달상권"},
+    {"external_id": "POI120", "name": "잠실롯데타워·석촌호수", "category": "발달상권"},
+    {"external_id": "POI127", "name": "올림픽공원", "category": "공원"}
+  ]
+}
