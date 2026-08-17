@@ -90,6 +90,76 @@ GET /api/places
 TourAPI에서 비활성화된 장소는 목록과 상세 조회에서 제외합니다. 외부 출처 없이
 팀이 직접 등록한 내부 장소는 조회할 수 있습니다.
 
+## 주변 장소 검색
+
+```http
+GET /api/places/nearby
+```
+
+사용자의 현재 좌표를 기준으로 지정 반경 안의 장소를 가까운 순서로 반환합니다.
+각 장소에는 `distance_km`가 추가되며, 서울 혼잡 영역과 연결된 장소는
+`latest_crowd`도 함께 반환합니다.
+
+### 쿼리 파라미터
+
+| 이름 | 기본값 | 설명 |
+| --- | --- | --- |
+| `latitude` | 필수 | 기준 위도. -90 이상 90 이하 |
+| `longitude` | 필수 | 기준 경도. -180 이상 180 이하 |
+| `radius_km` | `5` | 검색 반경(km). 0 초과 100 이하 |
+| `category` | 빈 값 | 카테고리 부분 검색 |
+| `crowd_level` | 빈 값 | 최신 혼잡도 필터 |
+| `page` | `1` | 1부터 시작하는 페이지 번호 |
+| `page_size` | `20` | 페이지당 개수. 최대 100 |
+
+### 응답 예시
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": 1,
+        "name": "경복궁",
+        "category": "관광지",
+        "region_code": "11-110",
+        "address": "서울특별시 종로구 사직로 161 (세종로)",
+        "latitude": 37.576031,
+        "longitude": 126.976722,
+        "distance_km": 0.142,
+        "latest_crowd": {
+          "area_name": "경복궁",
+          "level": "normal",
+          "population_min": 12000,
+          "population_max": 14000
+        }
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "page_size": 20,
+      "total": 1,
+      "total_pages": 1
+    },
+    "search_center": {
+      "latitude": 37.575,
+      "longitude": 126.977,
+      "radius_km": 5.0
+    },
+    "filters": {
+      "category": "",
+      "crowd_level": ""
+    }
+  },
+  "message": ""
+}
+```
+
+성능을 위해 위·경도 경계상자로 DB 후보를 먼저 제한하고, 후보에 하버사인
+공식을 적용해 정확한 반경과 거리를 계산합니다. 현재 MVP 최대 반경은 100km이며
+운영 데이터 규모와 사용 패턴을 확인한 뒤 공간 인덱스 도입 여부를 재검토합니다.
+
 ## 장소 상세
 
 ```http
@@ -135,6 +205,9 @@ curl -G "http://127.0.0.1:8000/api/places" \
 
 # 혼잡한 장소만 조회
 curl "http://127.0.0.1:8000/api/places?crowd_level=busy"
+
+# 경복궁 인근 3km 장소를 거리순으로 조회
+curl "http://127.0.0.1:8000/api/places/nearby?latitude=37.576031&longitude=126.976722&radius_km=3"
 ```
 
 실제 API 데이터로 시연할 때는 `sync_tour_places`, `sync_seoul_crowd`,

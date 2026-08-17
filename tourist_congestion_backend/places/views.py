@@ -9,6 +9,9 @@ from places.models import CrowdData, Place, PlaceSource
 
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
+DEFAULT_RADIUS_KM = 5.0
+MAX_RADIUS_KM = 100.0
+EARTH_RADIUS_KM = 6371.0088
 
 
 def _success(data):
@@ -32,6 +35,33 @@ def _positive_int(value, *, name, default):
     if parsed < 1:
         raise ValueError(f'{name} must be a positive integer.')
     return parsed
+
+
+def _finite_float(value, *, name, required=True, default=None):
+    if value in (None, ''):
+        if required:
+            raise ValueError(f'{name} is required.')
+        return default
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f'{name} must be a number.') from None
+    if not math.isfinite(parsed):
+        raise ValueError(f'{name} must be a finite number.')
+    return parsed
+
+
+def _validate_crowd_level(crowd_level):
+    if not crowd_level:
+        return None
+    valid_levels = set(CrowdData.CrowdLevel.values)
+    if crowd_level not in valid_levels:
+        raise ValueError(
+            'crowd_level must be one of: '
+            + ', '.join(CrowdData.CrowdLevel.values)
+            + '.'
+        )
+    return crowd_level
 
 
 def _visible_places():
@@ -103,7 +133,7 @@ def _latest_crowd(place):
     }
 
 
-def _serialize_place(place, *, detail=False):
+def _serialize_place(place, *, detail=False, distance_km=None):
     data = {
         'id': place.id,
         'name': place.name,
@@ -127,7 +157,38 @@ def _serialize_place(place, *, detail=False):
                 'updated_at': place.updated_at,
             }
         )
+    if distance_km is not None:
+        data['distance_km'] = round(distance_km, 3)
     return data
+
+
+def _haversine_km(latitude, longitude, place):
+    place_latitude = math.radians(float(place.latitude))
+    place_longitude = math.radians(float(place.longitude))
+    latitude = math.radians(latitude)
+    longitude = math.radians(longitude)
+    latitude_delta = place_latitude - latitude
+    longitude_delta = place_longitude - longitude
+    haversine = (
+        math.sin(latitude_delta / 2) ** 2
+        + math.cos(latitude)
+        * math.cos(place_latitude)
+        * math.sin(longitude_delta / 2) ** 2
+    )
+    return 2 * EARTH_RADIUS_KM * math.asin(min(1, math.sqrt(haversine)))
+
+
+def _nearby_bounding_box(latitude, longitude, radius_km):
+    latitude_delta = radius_km / 111.32
+    latitude_min = max(-90, latitude - latitude_delta)
+    latitude_max = min(90, latitude + latitude_delta)
+    longitude_scale = math.cos(math.radians(latitude))
+    longitude_delta = (
+        180 if abs(longitude_scale) < 1e-12 else radius_km / (111.32 * longitude_scale)
+    )
+    longitude_min = max(-180, longitude - longitude_delta)
+    longitude_max = min(180, longitude + longitude_delta)
+    return latitude_min, latitude_max, longitude_min, longitude_max
 
 
 @require_GET
@@ -159,14 +220,11 @@ def place_list(request):
         queryset = queryset.filter(category__icontains=category)
     if region_code:
         queryset = queryset.filter(region_code__startswith=region_code)
+    try:
+        crowd_level = _validate_crowd_level(crowd_level)
+    except ValueError as exc:
+        return _error(str(exc))
     if crowd_level:
-        valid_levels = set(CrowdData.CrowdLevel.values)
-        if crowd_level not in valid_levels:
-            return _error(
-                'crowd_level must be one of: '
-                + ', '.join(CrowdData.CrowdLevel.values)
-                + '.'
-            )
         queryset = queryset.filter(latest_crowd_level=crowd_level)
 
     total = queryset.count()
@@ -189,6 +247,91 @@ def place_list(request):
                 'category': category,
                 'region_code': region_code,
                 'crowd_level': crowd_level,
+            },
+        }
+    )
+
+
+@require_GET
+def nearby_places(request):
+    try:
+        latitude = _finite_float(request.GET.get('latitude'), name='latitude')
+        longitude = _finite_float(request.GET.get('longitude'), name='longitude')
+        radius_km = _finite_float(
+            request.GET.get('radius_km'),
+            name='radius_km',
+            required=False,
+            default=DEFAULT_RADIUS_KM,
+        )
+        page = _positive_int(request.GET.get('page'), name='page', default=1)
+        page_size = _positive_int(
+            request.GET.get('page_size'),
+            name='page_size',
+            default=DEFAULT_PAGE_SIZE,
+        )
+        crowd_level = _validate_crowd_level(
+            request.GET.get('crowd_level', '').strip().lower()
+        )
+    except ValueError as exc:
+        return _error(str(exc))
+
+    if not -90 <= latitude <= 90:
+        return _error('latitude must be between -90 and 90.')
+    if not -180 <= longitude <= 180:
+        return _error('longitude must be between -180 and 180.')
+    if radius_km <= 0:
+        return _error('radius_km must be greater than 0.')
+    if radius_km > MAX_RADIUS_KM:
+        return _error(f'radius_km must be at most {MAX_RADIUS_KM:g}.')
+    if page_size > MAX_PAGE_SIZE:
+        return _error(f'page_size must be at most {MAX_PAGE_SIZE}.')
+
+    category = request.GET.get('category', '').strip()
+    queryset = _visible_places()
+    if category:
+        queryset = queryset.filter(category__icontains=category)
+    if crowd_level:
+        queryset = queryset.filter(latest_crowd_level=crowd_level)
+
+    latitude_min, latitude_max, longitude_min, longitude_max = (
+        _nearby_bounding_box(latitude, longitude, radius_km)
+    )
+    candidates = queryset.filter(
+        latitude__gte=latitude_min,
+        latitude__lte=latitude_max,
+        longitude__gte=longitude_min,
+        longitude__lte=longitude_max,
+    )
+    nearby = []
+    for place in candidates:
+        distance_km = _haversine_km(latitude, longitude, place)
+        if distance_km <= radius_km:
+            nearby.append((distance_km, place))
+    nearby.sort(key=lambda item: (item[0], item[1].name, item[1].id))
+
+    total = len(nearby)
+    offset = (page - 1) * page_size
+    items = [
+        _serialize_place(place, distance_km=distance_km)
+        for distance_km, place in nearby[offset : offset + page_size]
+    ]
+    return _success(
+        {
+            'items': items,
+            'pagination': {
+                'page': page,
+                'page_size': page_size,
+                'total': total,
+                'total_pages': math.ceil(total / page_size),
+            },
+            'search_center': {
+                'latitude': latitude,
+                'longitude': longitude,
+                'radius_km': radius_km,
+            },
+            'filters': {
+                'category': category,
+                'crowd_level': crowd_level or '',
             },
         }
     )

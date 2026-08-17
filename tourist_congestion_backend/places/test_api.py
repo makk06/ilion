@@ -183,6 +183,131 @@ class PlaceAPITests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('relaxed, normal, busy, crowded, unknown', response.json()['message'])
 
+    def test_nearby_returns_places_sorted_by_distance_with_latest_crowd(self):
+        gwanghwamun = self._create_place(
+            name='광화문광장',
+            category='문화시설',
+            region_code='11-110',
+            address='서울특별시 종로구 세종대로 175',
+            latitude='37.572389',
+            longitude='126.976911',
+        )
+        self._create_source(gwanghwamun, 'gwanghwamun-1')
+
+        with self.assertNumQueries(1):
+            response = self.client.get(
+                reverse('place-nearby'),
+                {
+                    'latitude': '37.576031',
+                    'longitude': '126.976722',
+                    'radius_km': '2',
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()['data']
+        self.assertEqual(data['pagination']['total'], 2)
+        self.assertEqual(
+            [item['name'] for item in data['items']],
+            ['경복궁', '광화문광장'],
+        )
+        self.assertEqual(data['items'][0]['distance_km'], 0.0)
+        self.assertGreater(data['items'][1]['distance_km'], 0)
+        self.assertEqual(data['items'][0]['latest_crowd']['level'], 'busy')
+        self.assertEqual(
+            data['search_center'],
+            {
+                'latitude': 37.576031,
+                'longitude': 126.976722,
+                'radius_km': 2.0,
+            },
+        )
+
+    def test_nearby_supports_category_crowd_and_pagination_filters(self):
+        nearby_culture = self._create_place(
+            name='국립고궁박물관',
+            category='문화시설',
+            region_code='11-110',
+            address='서울특별시 종로구 효자로 12',
+            latitude='37.576548',
+            longitude='126.974973',
+        )
+        self._create_source(nearby_culture, 'museum-1')
+        center = {
+            'latitude': '37.576031',
+            'longitude': '126.976722',
+            'radius_km': '2',
+        }
+
+        category_response = self.client.get(
+            reverse('place-nearby'),
+            {**center, 'category': '문화'},
+        )
+        self.assertEqual(category_response.status_code, 200)
+        self.assertEqual(
+            [
+                item['name']
+                for item in category_response.json()['data']['items']
+            ],
+            ['국립고궁박물관'],
+        )
+
+        crowd_response = self.client.get(
+            reverse('place-nearby'),
+            {**center, 'crowd_level': 'busy'},
+        )
+        self.assertEqual(crowd_response.status_code, 200)
+        self.assertEqual(
+            [item['name'] for item in crowd_response.json()['data']['items']],
+            ['경복궁'],
+        )
+
+        page_response = self.client.get(
+            reverse('place-nearby'),
+            {**center, 'page': '2', 'page_size': '1'},
+        )
+        self.assertEqual(page_response.status_code, 200)
+        pagination = page_response.json()['data']['pagination']
+        self.assertEqual(
+            pagination,
+            {'page': 2, 'page_size': 1, 'total': 2, 'total_pages': 2},
+        )
+
+    def test_nearby_rejects_invalid_coordinates_and_radius(self):
+        cases = (
+            ({'longitude': '127'}, 'latitude is required.'),
+            ({'latitude': '37'}, 'longitude is required.'),
+            (
+                {'latitude': 'north', 'longitude': '127'},
+                'latitude must be a number.',
+            ),
+            (
+                {'latitude': 'nan', 'longitude': '127'},
+                'latitude must be a finite number.',
+            ),
+            (
+                {'latitude': '91', 'longitude': '127'},
+                'latitude must be between -90 and 90.',
+            ),
+            (
+                {'latitude': '37', 'longitude': '181'},
+                'longitude must be between -180 and 180.',
+            ),
+            (
+                {'latitude': '37', 'longitude': '127', 'radius_km': '0'},
+                'radius_km must be greater than 0.',
+            ),
+            (
+                {'latitude': '37', 'longitude': '127', 'radius_km': '101'},
+                'radius_km must be at most 100.',
+            ),
+        )
+        for params, expected_message in cases:
+            with self.subTest(params=params):
+                response = self.client.get(reverse('place-nearby'), params)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json()['message'], expected_message)
+
     def test_detail_returns_place_and_latest_crowd(self):
         with self.assertNumQueries(1):
             response = self.client.get(
@@ -215,6 +340,10 @@ class PlaceAPITests(TestCase):
 
     def test_endpoints_reject_post_requests(self):
         self.assertEqual(self.client.post(reverse('place-list')).status_code, 405)
+        self.assertEqual(
+            self.client.post(reverse('place-nearby')).status_code,
+            405,
+        )
         self.assertEqual(
             self.client.post(
                 reverse('place-detail', args=[self.gyeongbokgung.id])
