@@ -1,0 +1,217 @@
+{% load static %}
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#3758d3">
+  <meta name="description" content="ILION 장소·혼잡도 API 미팅 데모">
+  <title>ILION · 장소 혼잡도 데모</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{% static 'places/demo.css' %}">
+  <script src="{% static 'places/demo.js' %}" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#place-results">검색 결과로 이동</a>
+
+  <header class="site-header">
+    <div class="shell nav-inner">
+      <a class="brand" href="{% url 'place-demo' %}" aria-label="ILION 데모 홈">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 40 40" role="img">
+            <path d="M20 4.5c-6.5 0-11.8 5.2-11.8 11.7 0 8.3 11.8 19.3 11.8 19.3s11.8-11 11.8-19.3C31.8 9.7 26.5 4.5 20 4.5Z"/>
+            <circle cx="20" cy="16.2" r="5.2"/>
+          </svg>
+        </span>
+        <span>
+          <strong>ILION</strong>
+          <small>혼잡도 기반 장소 탐색</small>
+        </span>
+      </a>
+      <div class="nav-meta">
+        <span class="demo-label">MEETING DEMO</span>
+        <span class="api-health" id="api-health">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="api-health-text">API 연결 확인 중</span>
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell page-main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow">PUBLIC DATA, MADE USEFUL</p>
+        <h1 id="hero-title">지금, 어디가<br><span>덜 붐빌까요?</span></h1>
+        <p class="hero-description">
+          전국 관광 장소와 서울 실시간 인구 데이터를 연결해<br class="desktop-only">
+          장소 정보, 거리, 최신 혼잡도를 한눈에 확인합니다.
+        </p>
+        <div class="hero-actions">
+          <button class="button button-primary" id="use-location" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Zm0-9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg>
+            내 주변 장소 찾기
+          </button>
+          <button class="button button-ghost" id="refresh-results" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6"/></svg>
+            데이터 새로고침
+          </button>
+        </div>
+      </div>
+      <div class="hero-visual" aria-hidden="true">
+        <div class="map-grid"></div>
+        <span class="map-road road-one"></span>
+        <span class="map-road road-two"></span>
+        <span class="map-road road-three"></span>
+        <div class="map-pin pin-primary">
+          <span class="pin-pulse"></span>
+          <span class="pin-core"></span>
+        </div>
+        <div class="map-pin pin-secondary"><span class="pin-core"></span></div>
+        <div class="map-pin pin-tertiary"><span class="pin-core"></span></div>
+        <div class="floating-card crowd-preview">
+          <span class="preview-icon">⌁</span>
+          <span><small>경복궁 일대</small><strong>실시간 혼잡도</strong></span>
+          <span class="mini-badge normal">보통</span>
+        </div>
+        <div class="floating-card source-preview">
+          <span class="source-symbol">공공</span>
+          <span><small>데이터 연동</small><strong>전국 장소 + 서울 혼잡도</strong></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="stats" aria-label="현재 조회 요약">
+      <article class="stat-card">
+        <span class="stat-icon blue" aria-hidden="true">⌖</span>
+        <span><small>검색된 장소</small><strong id="stat-total">—</strong></span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon green" aria-hidden="true">●</span>
+        <span><small>혼잡도 제공</small><strong id="stat-crowd">—</strong></span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon amber" aria-hidden="true">◇</span>
+        <span><small>포함 지역</small><strong id="stat-regions">—</strong></span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon coral" aria-hidden="true">↻</span>
+        <span><small>마지막 조회</small><strong id="stat-updated">—</strong></span>
+      </article>
+    </section>
+
+    <section class="explorer" aria-labelledby="explorer-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">EXPLORE PLACES</p>
+          <h2 id="explorer-title">장소 탐색</h2>
+          <p id="result-context">전국 개발 데이터를 불러오고 있습니다.</p>
+        </div>
+        <span class="data-note">DB에 저장된 최신 관측 기준</span>
+      </div>
+
+      <form class="search-panel" id="place-search" role="search">
+        <label class="search-field">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+          <span class="sr-only">장소명 또는 주소 검색</span>
+          <input id="keyword" name="keyword" type="search" placeholder="장소명이나 주소를 검색해보세요" autocomplete="off">
+        </label>
+        <label class="select-field">
+          <span>지역</span>
+          <select id="region-code" name="region_code">
+            <option value="">전국</option>
+            <option value="11">서울</option>
+            <option value="26">부산</option>
+            <option value="41">경기</option>
+            <option value="51">강원</option>
+            <option value="50">제주</option>
+            <option value="30">대전</option>
+            <option value="52">전북</option>
+            <option value="12">광주</option>
+          </select>
+        </label>
+        <label class="select-field">
+          <span>카테고리</span>
+          <select id="category" name="category">
+            <option value="">전체</option>
+            <option value="관광지">관광지</option>
+            <option value="문화시설">문화시설</option>
+            <option value="쇼핑">쇼핑</option>
+            <option value="음식점">음식점</option>
+          </select>
+        </label>
+        <label class="select-field">
+          <span>혼잡도</span>
+          <select id="crowd-level" name="crowd_level">
+            <option value="">전체</option>
+            <option value="relaxed">여유</option>
+            <option value="normal">보통</option>
+            <option value="busy">약간 붐빔</option>
+            <option value="crowded">붐빔</option>
+          </select>
+        </label>
+        <button class="button button-search" type="submit">검색</button>
+      </form>
+
+      <div class="quick-filters" aria-label="빠른 검색">
+        <span>빠른 보기</span>
+        <button type="button" class="filter-chip active" data-action="all">전국 장소</button>
+        <button type="button" class="filter-chip" data-action="seoul">서울만</button>
+        <button type="button" class="filter-chip" data-action="with-crowd">혼잡도 제공</button>
+        <button type="button" class="filter-chip" data-action="palace-nearby">경복궁 주변 3km</button>
+      </div>
+
+      <div class="feedback loading-state" id="loading-state" role="status">
+        <span class="spinner" aria-hidden="true"></span>
+        <strong>장소 데이터를 불러오는 중입니다</strong>
+        <small>전국 장소와 최신 혼잡도를 연결하고 있어요.</small>
+      </div>
+      <div class="feedback error-state hidden" id="error-state" role="alert">
+        <span aria-hidden="true">!</span>
+        <strong>데이터를 불러오지 못했습니다</strong>
+        <small id="error-message">Django 서버와 API 상태를 확인해주세요.</small>
+        <button class="button button-ghost" id="retry-load" type="button">다시 시도</button>
+      </div>
+      <div class="feedback empty-state hidden" id="empty-state">
+        <span aria-hidden="true">⌕</span>
+        <strong>조건에 맞는 장소가 없습니다</strong>
+        <small>검색어나 필터를 바꿔보세요.</small>
+      </div>
+      <div class="place-grid hidden" id="place-results" data-testid="place-results" aria-live="polite"></div>
+    </section>
+
+    <section class="architecture-note" aria-label="데모 데이터 흐름">
+      <div>
+        <span class="flow-number">1</span>
+        <p><strong>공공데이터 수집</strong><small>TourAPI · 서울 실시간 인구</small></p>
+      </div>
+      <span class="flow-arrow">→</span>
+      <div>
+        <span class="flow-number">2</span>
+        <p><strong>내부 데이터 구조화</strong><small>장소 · 상세정보 · 혼잡 영역</small></p>
+      </div>
+      <span class="flow-arrow">→</span>
+      <div>
+        <span class="flow-number">3</span>
+        <p><strong>앱 API 제공</strong><small>검색 · 상세 · 주변 장소</small></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell">
+      <span>ILION Backend Capability Demo</span>
+      <span>전국 장소 · 서울 일부 실시간 혼잡도</span>
+    </div>
+  </footer>
+
+  <dialog class="detail-dialog" id="detail-dialog" aria-labelledby="detail-title">
+    <button class="dialog-close" id="close-detail" type="button" aria-label="상세 닫기">×</button>
+    <div id="detail-content"></div>
+  </dialog>
+
+  <noscript>
+    <div class="noscript">이 데모는 장소 API 호출을 위해 JavaScript가 필요합니다.</div>
+  </noscript>
+</body>
+</html>

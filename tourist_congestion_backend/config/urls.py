@@ -18,9 +18,11 @@ from django.contrib import admin
 from django.urls import include, path
 
 from config.views import healthz
+from places.demo_views import place_demo
 
 urlpatterns = [
     path('healthz', healthz, name='healthz'),
+    path('demo/', place_demo, name='place-demo'),
     path('api/', include('places.urls')),
     path('admin/', admin.site.urls),
 ]
