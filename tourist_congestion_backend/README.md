@@ -10,6 +10,7 @@ Django 프레임워크를 사용하며, 개발용 데이터베이스로 SQLite�
 - Django 관리자 페이지
 - 개발용 SQLite 데이터베이스
 - 상태 확인 API: `GET /healthz`
+- 전국 장소·서울 혼잡도 조회 API: `GET /api/places`
 
 ## 초기 설치 방법
 
@@ -75,6 +76,16 @@ python manage.py runserver
   "status": "ok"
 }
 ```
+
+장소 목록·검색과 상세 조회는 다음 경로를 사용합니다.
+
+```text
+GET /api/places
+GET /api/places/{place_id}
+```
+
+검색·필터 파라미터, 응답 필드와 로컬 시연 순서는 [API.md](./API.md)를
+확인합니다.
 
 ## 공공데이터 동기화
 
