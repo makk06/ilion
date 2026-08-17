@@ -54,6 +54,7 @@ GET /api/places
         "longitude": 126.976722,
         "indoor_outdoor": "unknown",
         "avg_rating": null,
+        "image_url": "https://example.com/gyeongbokgung.jpg",
         "latest_crowd": {
           "area_id": 1,
           "area_external_id": "POI008",
@@ -166,9 +167,28 @@ GET /api/places/nearby
 GET /api/places/{place_id}
 ```
 
-목록의 장소 필드와 최신 혼잡도에 더해 `open_status`, `created_at`,
-`updated_at`을 반환합니다. 조회 가능한 장소가 없으면 HTTP 404와 아래 응답을
-반환합니다.
+목록의 장소 필드와 최신 혼잡도에 더해 `open_status`, `info`, `created_at`,
+`updated_at`을 반환합니다. `info`에는 소개, 전화번호, 홈페이지, 대표 이미지,
+운영시간, 휴무일, 태그와 상세정보 출처가 포함됩니다. 아직 상세정보를 보강하지
+않은 장소의 `info`는 `null`입니다.
+
+```json
+{
+  "info": {
+    "description": "조선 왕조의 법궁입니다.",
+    "phone": "02-3700-3900",
+    "homepage_url": "https://royal.khs.go.kr/",
+    "first_image_url": "https://example.com/gyeongbokgung.jpg",
+    "opening_hours": "09:00~18:00",
+    "holiday_info": "매주 화요일",
+    "tags": ["관광지"],
+    "source": "tour_api",
+    "updated_at": "2026-08-17T13:30:00+09:00"
+  }
+}
+```
+
+조회 가능한 장소가 없으면 HTTP 404와 아래 응답을 반환합니다.
 
 ```json
 {
@@ -188,6 +208,23 @@ source .venv/bin/activate
 python manage.py migrate
 python manage.py seed_dev_data
 python manage.py runserver
+```
+
+개발 시드는 10개 장소에 API 키가 필요 없는 샘플 상세정보를 포함합니다. 실제
+TourAPI 상세정보로 선택한 장소를 보강하려면 다음 명령을 사용합니다. 기본 10개,
+최대 100개만 처리하며 장소 하나당 공통정보와 소개정보 요청을 각각 한 번
+사용합니다.
+
+```bash
+# DB에 반영하지 않고 호출·정규화 시험
+python manage.py sync_tour_place_details 126508 --dry-run
+
+# 매칭된 장소 10개를 실제 상세정보로 보강
+python manage.py sync_tour_place_details --limit 10
+
+# 서울 장소 중 20개를 공통정보만 보강(장소당 1회 호출)
+python manage.py sync_tour_place_details \
+  --region-code 11 --limit 20 --skip-intro
 ```
 
 다른 터미널에서 다음 요청을 실행합니다.
@@ -210,5 +247,6 @@ curl "http://127.0.0.1:8000/api/places?crowd_level=busy"
 curl "http://127.0.0.1:8000/api/places/nearby?latitude=37.576031&longitude=126.976722&radius_km=3"
 ```
 
-실제 API 데이터로 시연할 때는 `sync_tour_places`, `sync_seoul_crowd`,
-`map_place_crowd_area` 순서로 적재·연결한 뒤 같은 조회 API를 사용합니다.
+실제 API 데이터로 시연할 때는 `sync_tour_places`,
+`sync_tour_place_details`, `sync_seoul_crowd`, `map_place_crowd_area` 순서로
+적재·연결한 뒤 같은 조회 API를 사용합니다.

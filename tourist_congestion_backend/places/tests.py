@@ -15,16 +15,23 @@ from places.integrations.seoul_realtime import (
     SeoulRealtimeClient,
     normalize_seoul_population,
 )
-from places.integrations.tour_api import TourAPIClient, TourAPIPage, normalize_tour_place
+from places.integrations.tour_api import (
+    TourAPIClient,
+    TourAPIPage,
+    normalize_tour_place,
+    normalize_tour_place_detail,
+)
 from places.models import (
     CrowdArea,
     CrowdData,
     ExternalSource,
     Place,
     PlaceCrowdArea,
+    PlaceInfo,
     PlaceSource,
 )
 from places.services.seoul_sync import SeoulCrowdSyncService
+from places.services.tour_detail_sync import TourPlaceDetailSyncService
 from places.services.tour_sync import TourPlaceSyncService
 
 
@@ -128,6 +135,56 @@ class TourAPIClientTests(TestCase):
 
         self.assertFalse(record.can_create_place)
 
+    def test_normalizes_common_and_type_specific_detail_fields(self):
+        common = load_fixture('tourapi_place_common.json')['response']['body'][
+            'items'
+        ]['item']
+        intro = load_fixture('tourapi_place_intro.json')['response']['body'][
+            'items'
+        ]['item']
+
+        record = normalize_tour_place_detail(common, intro)
+
+        self.assertEqual(record.external_id, '126508')
+        self.assertEqual(
+            record.description,
+            '조선 왕조의 법궁입니다.\n역사 문화 공간입니다.',
+        )
+        self.assertEqual(record.homepage_url, 'https://royal.khs.go.kr/')
+        self.assertEqual(
+            record.first_image_url,
+            'https://example.com/gyeongbokgung.jpg',
+        )
+        self.assertEqual(record.opening_hours, '09:00~18:00\n입장 마감 17:00')
+        self.assertEqual(record.holiday_info, '매주 화요일')
+
+    def test_client_fetches_common_and_intro_details(self):
+        common_response = Mock()
+        common_response.json.return_value = load_fixture(
+            'tourapi_place_common.json'
+        )
+        common_response.raise_for_status.return_value = None
+        intro_response = Mock()
+        intro_response.json.return_value = load_fixture(
+            'tourapi_place_intro.json'
+        )
+        intro_response.raise_for_status.return_value = None
+        session = Mock()
+        session.get.side_effect = [common_response, intro_response]
+        client = TourAPIClient(service_key='test-key', session=session)
+
+        record = client.fetch_place_detail('126508', '12')
+
+        self.assertEqual(record.external_id, '126508')
+        self.assertEqual(session.get.call_count, 2)
+        common_call, intro_call = session.get.call_args_list
+        self.assertTrue(common_call.args[0].endswith('/detailCommon2'))
+        self.assertTrue(intro_call.args[0].endswith('/detailIntro2'))
+        self.assertEqual(common_call.kwargs['params']['contentId'], '126508')
+        self.assertNotIn('contentTypeId', common_call.kwargs['params'])
+        self.assertNotIn('defaultYN', common_call.kwargs['params'])
+        self.assertEqual(intro_call.kwargs['params']['contentTypeId'], '12')
+
     def test_provider_error_does_not_include_service_key(self):
         response = Mock()
         response.raise_for_status.side_effect = __import__('requests').HTTPError(
@@ -151,6 +208,18 @@ class TourAPIClientTests(TestCase):
 
         self.assertNotIn('secret-key', str(context.exception))
         self.assertIn('code 30', str(context.exception))
+
+    def test_top_level_parameter_error_is_reported_without_payload_dump(self):
+        with self.assertRaises(ExternalAPIError) as context:
+            TourAPIClient._parse_page(
+                {
+                    'resultCode': '10',
+                    'resultMsg': 'INVALID_REQUEST_PARAMETER_ERROR(defaultYN)',
+                }
+            )
+
+        self.assertIn('code 10', str(context.exception))
+        self.assertIn('defaultYN', str(context.exception))
 
 
 class TourPlaceSyncServiceTests(TestCase):
@@ -207,6 +276,72 @@ class TourPlaceSyncServiceTests(TestCase):
         self.assertEqual(result.processed, 1)
         self.assertFalse(Place.objects.exists())
         self.assertFalse(PlaceSource.objects.exists())
+
+
+class TourPlaceDetailSyncServiceTests(TestCase):
+    def setUp(self):
+        self.source = self._create_source()
+        common = load_fixture('tourapi_place_common.json')['response']['body'][
+            'items'
+        ]['item']
+        intro = load_fixture('tourapi_place_intro.json')['response']['body'][
+            'items'
+        ]['item']
+        self.detail = normalize_tour_place_detail(common, intro)
+
+    @staticmethod
+    def _create_source():
+        record = TourAPIClient._parse_page(
+            load_fixture('tourapi_places.json')
+        ).records[0]
+        TourPlaceSyncService(
+            Mock(fetch_places_page=Mock(return_value=TourAPIPage(
+                records=[record],
+                page_number=1,
+                page_size=1,
+                total_count=1,
+            )))
+        ).sync()
+        return PlaceSource.objects.select_related('place').get()
+
+    def test_sync_is_idempotent_and_preserves_structured_detail(self):
+        client = Mock()
+        client.fetch_place_detail.return_value = self.detail
+        service = TourPlaceDetailSyncService(client)
+
+        first = service.sync([self.source])
+        second = service.sync([self.source])
+
+        self.assertEqual(first.infos_created, 1)
+        self.assertEqual(second.infos_updated, 1)
+        self.assertEqual(PlaceInfo.objects.count(), 1)
+        info = PlaceInfo.objects.get()
+        self.assertEqual(info.description, self.detail.description)
+        self.assertEqual(info.opening_hours, self.detail.opening_hours)
+        self.assertEqual(info.merged_summary_source, ExternalSource.TOUR_API)
+        self.assertIn('common', info.raw_data)
+
+    def test_dry_run_rolls_back_detail_changes(self):
+        client = Mock()
+        client.fetch_place_detail.return_value = self.detail
+
+        result = TourPlaceDetailSyncService(client).sync(
+            [self.source],
+            dry_run=True,
+        )
+
+        self.assertEqual(result.processed, 1)
+        self.assertFalse(PlaceInfo.objects.exists())
+
+    def test_source_without_content_type_is_skipped(self):
+        self.source.raw_data = {}
+        self.source.save(update_fields=['raw_data'])
+        client = Mock()
+
+        result = TourPlaceDetailSyncService(client).sync([self.source])
+
+        self.assertEqual(result.skipped, 1)
+        client.fetch_place_detail.assert_not_called()
 
 
 class SeoulRealtimeTests(TestCase):
@@ -308,6 +443,45 @@ class SyncCommandTests(TestCase):
         self.assertEqual(mapping.crowd_area, crowd_area)
         self.assertIn('created mapping', output.getvalue())
 
+    @patch('places.management.commands.sync_tour_place_details.TourAPIClient')
+    def test_tour_detail_command_reports_dry_run(self, client_class):
+        record = TourAPIClient._parse_page(
+            load_fixture('tourapi_places.json')
+        ).records[0]
+        TourPlaceSyncService(
+            Mock(
+                fetch_places_page=Mock(
+                    return_value=TourAPIPage(
+                        records=[record],
+                        page_number=1,
+                        page_size=1,
+                        total_count=1,
+                    )
+                )
+            )
+        ).sync()
+        common = load_fixture('tourapi_place_common.json')['response']['body'][
+            'items'
+        ]['item']
+        intro = load_fixture('tourapi_place_intro.json')['response']['body'][
+            'items'
+        ]['item']
+        client_class.return_value.fetch_place_detail.return_value = (
+            normalize_tour_place_detail(common, intro)
+        )
+        output = StringIO()
+
+        call_command(
+            'sync_tour_place_details',
+            '126508',
+            '--dry-run',
+            stdout=output,
+        )
+
+        self.assertIn('[dry-run]', output.getvalue())
+        self.assertIn('external_requests=2', output.getvalue())
+        self.assertFalse(PlaceInfo.objects.exists())
+
 
 class SeedDevDataCommandTests(TestCase):
     @override_settings(DEBUG=True)
@@ -320,6 +494,7 @@ class SeedDevDataCommandTests(TestCase):
 
         self.assertEqual(Place.objects.count(), 10)
         self.assertEqual(PlaceSource.objects.count(), 10)
+        self.assertEqual(PlaceInfo.objects.count(), 10)
         self.assertEqual(CrowdArea.objects.count(), 2)
         self.assertEqual(CrowdData.objects.count(), 2)
         self.assertEqual(PlaceCrowdArea.objects.count(), 1)
@@ -330,6 +505,7 @@ class SeedDevDataCommandTests(TestCase):
 
         self.assertFalse(Place.objects.exists())
         self.assertFalse(PlaceSource.objects.exists())
+        self.assertFalse(PlaceInfo.objects.exists())
         self.assertFalse(CrowdArea.objects.exists())
         self.assertFalse(CrowdData.objects.exists())
 

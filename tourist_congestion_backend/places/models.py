@@ -58,6 +58,32 @@ class Place(models.Model):
         return self.name
 
 
+class PlaceInfo(models.Model):
+    place = models.OneToOneField(
+        Place,
+        on_delete=models.CASCADE,
+        related_name='info',
+    )
+    description = models.TextField(blank=True)
+    phone = models.CharField(max_length=255, blank=True)
+    homepage_url = models.URLField(max_length=1000, blank=True)
+    first_image_url = models.URLField(max_length=1000, blank=True)
+    opening_hours = models.TextField(blank=True)
+    holiday_info = models.TextField(blank=True)
+    tags = models.JSONField(default=list)
+    merged_summary_source = models.CharField(
+        max_length=30,
+        choices=ExternalSource,
+        blank=True,
+    )
+    raw_data = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.place} details'
+
+
 class PlaceSource(models.Model):
     class MatchStatus(models.TextChoices):
         NEW = 'new', 'New'

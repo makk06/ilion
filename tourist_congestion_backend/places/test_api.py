@@ -12,6 +12,7 @@ from places.models import (
     ExternalSource,
     Place,
     PlaceCrowdArea,
+    PlaceInfo,
     PlaceSource,
 )
 
@@ -88,6 +89,17 @@ class PlaceAPITests(TestCase):
             population_min=12000,
             population_max=14000,
         )
+        PlaceInfo.objects.create(
+            place=self.gyeongbokgung,
+            description='조선 왕조의 법궁입니다.',
+            phone='02-3700-3900',
+            homepage_url='https://royal.khs.go.kr/',
+            first_image_url='https://example.com/gyeongbokgung.jpg',
+            opening_hours='09:00~18:00',
+            holiday_info='화요일',
+            tags=['역사', '궁궐'],
+            merged_summary_source=ExternalSource.TOUR_API,
+        )
 
     @staticmethod
     def _create_place(**values):
@@ -124,7 +136,12 @@ class PlaceAPITests(TestCase):
         self.assertEqual(crowd['score'], 75)
         self.assertEqual(crowd['population_min'], 12000)
         self.assertEqual(crowd['area_external_id'], 'POI008')
+        self.assertEqual(
+            items_by_name['경복궁']['image_url'],
+            'https://example.com/gyeongbokgung.jpg',
+        )
         self.assertIsNone(items_by_name['해운대해수욕장']['latest_crowd'])
+        self.assertIsNone(items_by_name['해운대해수욕장']['image_url'])
 
     def test_list_filters_by_keyword_region_category_and_latest_crowd(self):
         response = self.client.get(
@@ -319,6 +336,9 @@ class PlaceAPITests(TestCase):
         self.assertEqual(place['name'], '경복궁')
         self.assertEqual(place['latitude'], 37.576031)
         self.assertEqual(place['latest_crowd']['level'], 'busy')
+        self.assertEqual(place['info']['description'], '조선 왕조의 법궁입니다.')
+        self.assertEqual(place['info']['tags'], ['역사', '궁궐'])
+        self.assertEqual(place['info']['source'], 'tour_api')
         self.assertIn('created_at', place)
         self.assertIn('updated_at', place)
 
@@ -365,3 +385,11 @@ class SeededPlaceAPITests(TestCase):
         data = response.json()['data']
         self.assertEqual(data['pagination']['total'], 1)
         self.assertEqual(data['items'][0]['latest_crowd']['level'], 'normal')
+
+        detail_response = self.client.get(
+            reverse('place-detail', args=[data['items'][0]['id']])
+        )
+        self.assertIn(
+            '실제 운영에서는 TourAPI 상세정보로 갱신됩니다.',
+            detail_response.json()['data']['info']['description'],
+        )

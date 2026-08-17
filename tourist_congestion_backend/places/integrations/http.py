@@ -43,7 +43,7 @@ def get_json(session, url, *, params=None, timeout=None, provider):
     try:
         response.raise_for_status()
     except requests.RequestException:
-        detail = _extract_error_detail(payload)
+        detail = extract_error_detail(payload)
         suffix = f', {detail}' if detail else ''
         raise ExternalAPIError(
             f'{provider} request failed (HTTP {response.status_code}{suffix})'
@@ -54,7 +54,7 @@ def get_json(session, url, *, params=None, timeout=None, provider):
     return payload
 
 
-def _extract_error_detail(payload):
+def extract_error_detail(payload):
     if not isinstance(payload, dict):
         return ''
 
@@ -68,6 +68,11 @@ def _extract_error_detail(payload):
             or public_data_error.get('errMsg')
         )
         return _format_error(code, message)
+
+    top_level_code = payload.get('resultCode')
+    top_level_message = payload.get('resultMsg')
+    if top_level_code or top_level_message:
+        return _format_error(top_level_code, top_level_message)
 
     result = payload.get('RESULT') or payload.get('result') or {}
     code = result.get('RESULT.CODE') or result.get('CODE') or result.get('code')

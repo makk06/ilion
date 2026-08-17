@@ -1,10 +1,17 @@
 import os
+import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
-from urllib.parse import unquote
+from html import unescape
+from urllib.parse import unquote, urlparse
 
 from .exceptions import ExternalAPIConfigurationError, ExternalAPIError
-from .http import DEFAULT_TIMEOUT_SECONDS, build_retrying_session, get_json
+from .http import (
+    DEFAULT_TIMEOUT_SECONDS,
+    build_retrying_session,
+    extract_error_detail,
+    get_json,
+)
 
 
 CONTENT_TYPE_NAMES = {
@@ -17,6 +24,31 @@ CONTENT_TYPE_NAMES = {
     '38': '쇼핑',
     '39': '음식점',
 }
+
+OPENING_HOUR_KEYS = (
+    'usetime',
+    'usetimeculture',
+    'usetimefestival',
+    'usetimeleports',
+    'opentime',
+    'opentimefood',
+    'checkintime',
+)
+HOLIDAY_INFO_KEYS = (
+    'restdate',
+    'restdateculture',
+    'restdateleports',
+    'restdateshopping',
+    'restdatefood',
+)
+INFO_CENTER_KEYS = (
+    'infocenter',
+    'infocenterculture',
+    'infocenterleports',
+    'infocentershopping',
+    'infocenterfood',
+    'infocenterlodging',
+)
 
 
 def _value(data, *keys, default=''):
@@ -47,6 +79,31 @@ def _integer(value, default=0):
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _plain_text(value):
+    if value in (None, ''):
+        return ''
+    text = str(value)
+    text = re.sub(r'(?i)<br\s*/?>', '\n', text)
+    text = re.sub(r'(?i)</p\s*>', '\n', text)
+    text = re.sub(r'<[^>]+>', '', text)
+    text = unescape(text).replace('\r', '')
+    return '\n'.join(line.strip() for line in text.split('\n') if line.strip())
+
+
+def _http_url(value):
+    if value in (None, ''):
+        return ''
+    raw = unescape(str(value)).strip()
+    match = re.search(r'''(?i)href=["']([^"']+)["']''', raw)
+    candidate = match.group(1).strip() if match else _plain_text(raw)
+    parsed = urlparse(candidate)
+    return candidate if parsed.scheme in {'http', 'https'} and parsed.netloc else ''
+
+
+def _first_text(data, keys):
+    return next((_plain_text(data.get(key)) for key in keys if data.get(key)), '')
 
 
 @dataclass(frozen=True)
@@ -88,6 +145,63 @@ class TourAPIPage:
     @property
     def has_next(self):
         return self.page_number * self.page_size < self.total_count
+
+
+@dataclass(frozen=True)
+class TourPlaceDetailRecord:
+    external_id: str
+    content_type_id: str
+    description: str
+    phone: str
+    homepage_url: str
+    first_image_url: str
+    opening_hours: str
+    holiday_info: str
+    raw_data: dict
+
+
+def normalize_tour_place_detail(common_item, intro_item=None):
+    intro_item = intro_item or {}
+    return TourPlaceDetailRecord(
+        external_id=_text(common_item, 'contentid', 'contentId')
+        or _text(intro_item, 'contentid', 'contentId'),
+        content_type_id=_text(common_item, 'contenttypeid', 'contentTypeId')
+        or _text(intro_item, 'contenttypeid', 'contentTypeId'),
+        description=_plain_text(_value(common_item, 'overview')),
+        phone=_plain_text(_value(common_item, 'tel'))
+        or _first_text(intro_item, INFO_CENTER_KEYS),
+        homepage_url=_http_url(_value(common_item, 'homepage')),
+        first_image_url=_http_url(
+            _value(common_item, 'firstimage', 'firstImage')
+        ),
+        opening_hours=_first_text(intro_item, OPENING_HOUR_KEYS),
+        holiday_info=_first_text(intro_item, HOLIDAY_INFO_KEYS),
+        raw_data={'common': common_item, 'intro': intro_item},
+    )
+
+
+def _response_items(payload):
+    response = payload.get('response')
+    if not isinstance(response, dict):
+        detail = extract_error_detail(payload)
+        if detail:
+            raise ExternalAPIError(f'TourAPI error response: {detail}')
+        raise ExternalAPIError('TourAPI returned an invalid response structure')
+
+    header = response.get('header') or {}
+    result_code = str(header.get('resultCode', ''))
+    if result_code != '0000':
+        message = str(header.get('resultMsg') or 'unknown error')
+        raise ExternalAPIError(f'TourAPI error {result_code}: {message}')
+
+    body = response.get('body') or {}
+    item_container = body.get('items') or {}
+    items = item_container.get('item', []) if isinstance(item_container, dict) else []
+    if isinstance(items, dict):
+        items = [items]
+    if not isinstance(items, list):
+        items = []
+    return body, [item for item in items if isinstance(item, dict)]
 
 
 def normalize_tour_place(item):
@@ -141,6 +255,14 @@ class TourAPIClient:
         self.session = session or build_retrying_session()
         self.timeout = timeout or DEFAULT_TIMEOUT_SECONDS
 
+    def _base_params(self):
+        return {
+            'serviceKey': self.service_key,
+            'MobileOS': 'ETC',
+            'MobileApp': 'ILION',
+            '_type': 'json',
+        }
+
     def fetch_places_page(
         self,
         *,
@@ -150,10 +272,7 @@ class TourAPIClient:
         region_code=None,
     ):
         params = {
-            'serviceKey': self.service_key,
-            'MobileOS': 'ETC',
-            'MobileApp': 'ILION',
-            '_type': 'json',
+            **self._base_params(),
             'arrange': 'C',
             'pageNo': page_number,
             'numOfRows': page_size,
@@ -172,25 +291,46 @@ class TourAPIClient:
         )
         return self._parse_page(payload)
 
+    def fetch_place_detail(self, content_id, content_type_id, *, include_intro=True):
+        common_params = {
+            **self._base_params(),
+            'contentId': content_id,
+        }
+        common_payload = get_json(
+            self.session,
+            f'{self.base_url}/detailCommon2',
+            params=common_params,
+            timeout=self.timeout,
+            provider='TourAPI',
+        )
+        _, common_items = _response_items(common_payload)
+        common_item = common_items[0] if common_items else {}
+
+        intro_item = {}
+        if include_intro:
+            intro_payload = get_json(
+                self.session,
+                f'{self.base_url}/detailIntro2',
+                params={
+                    **self._base_params(),
+                    'contentId': content_id,
+                    'contentTypeId': content_type_id,
+                },
+                timeout=self.timeout,
+                provider='TourAPI',
+            )
+            _, intro_items = _response_items(intro_payload)
+            intro_item = intro_items[0] if intro_items else {}
+
+        if not common_item and not intro_item:
+            raise ExternalAPIError(
+                f'TourAPI returned no detail for content {content_id}'
+            )
+        return normalize_tour_place_detail(common_item, intro_item)
+
     @staticmethod
     def _parse_page(payload):
-        response = payload.get('response')
-        if not isinstance(response, dict):
-            raise ExternalAPIError('TourAPI returned an invalid response structure')
-
-        header = response.get('header') or {}
-        result_code = str(header.get('resultCode', ''))
-        if result_code != '0000':
-            message = str(header.get('resultMsg') or 'unknown error')
-            raise ExternalAPIError(f'TourAPI error {result_code}: {message}')
-
-        body = response.get('body') or {}
-        item_container = body.get('items') or {}
-        items = item_container.get('item', []) if isinstance(item_container, dict) else []
-        if isinstance(items, dict):
-            items = [items]
-        if not isinstance(items, list):
-            items = []
+        body, items = _response_items(payload)
 
         records = [
             normalize_tour_place(item)

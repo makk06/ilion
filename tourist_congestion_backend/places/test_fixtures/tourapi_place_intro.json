@@ -1,0 +1,22 @@
+{
+  "response": {
+    "header": {
+      "resultCode": "0000",
+      "resultMsg": "OK"
+    },
+    "body": {
+      "items": {
+        "item": {
+          "contentid": "126508",
+          "contenttypeid": "12",
+          "infocenter": "경복궁 관리소 02-3700-3900",
+          "usetime": "09:00~18:00<br>입장 마감 17:00",
+          "restdate": "매주 화요일"
+        }
+      },
+      "numOfRows": 1,
+      "pageNo": 1,
+      "totalCount": 1
+    }
+  }
+}

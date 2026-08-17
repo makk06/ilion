@@ -7,6 +7,7 @@ from django.utils import timezone
 from places.dev_seed_data import (
     CROWD_AREA_ITEMS,
     PLACE_CROWD_AREA_MAPPINGS,
+    TOUR_PLACE_INFO_ITEMS,
     TOUR_PLACE_ITEMS,
 )
 from places.integrations.tour_api import TourAPIPage, normalize_tour_place
@@ -16,6 +17,7 @@ from places.models import (
     ExternalSource,
     Place,
     PlaceCrowdArea,
+    PlaceInfo,
     PlaceSource,
 )
 from places.services import TourPlaceSyncService
@@ -51,6 +53,7 @@ class Command(BaseCommand):
                 self.style.SUCCESS(
                     'cleared development data: '
                     f"places={result['places']} sources={result['sources']} "
+                    f"infos={result['infos']} "
                     f"areas={result['areas']} observations={result['observations']}"
                 )
             )
@@ -59,9 +62,10 @@ class Command(BaseCommand):
         result = self._seed()
         self.stdout.write(
             self.style.SUCCESS(
-                'seeded development data: '
-                f"places={result['places']} sources={result['sources']} "
-                f"areas={result['areas']} observations={result['observations']} "
+                    'seeded development data: '
+                    f"places={result['places']} sources={result['sources']} "
+                    f"infos={result['infos']} "
+                    f"areas={result['areas']} observations={result['observations']} "
                 f"mappings={result['mappings']} skipped_real={result['skipped_real']}"
             )
         )
@@ -82,6 +86,29 @@ class Command(BaseCommand):
             records.append(normalize_tour_place(dict(item)))
 
         TourPlaceSyncService(StaticTourClient(records)).sync()
+        for item in TOUR_PLACE_INFO_ITEMS:
+            source = PlaceSource.objects.filter(
+                source=ExternalSource.TOUR_API,
+                external_id=item['external_id'],
+                raw_data__dev_seed=True,
+                place__isnull=False,
+            ).select_related('place').first()
+            if source is None:
+                continue
+            existing_info = PlaceInfo.objects.filter(place=source.place).first()
+            if existing_info and not existing_info.raw_data.get('dev_seed'):
+                continue
+            PlaceInfo.objects.update_or_create(
+                place=source.place,
+                defaults={
+                    'description': item['description'],
+                    'opening_hours': item['opening_hours'],
+                    'tags': item['tags'],
+                    'merged_summary_source': ExternalSource.TOUR_API,
+                    'raw_data': {'dev_seed': True},
+                },
+            )
+
         now = timezone.now()
         seeded_areas = []
         for item in CROWD_AREA_ITEMS:
@@ -150,6 +177,7 @@ class Command(BaseCommand):
             .distinct()
             .count(),
             'sources': PlaceSource.objects.filter(raw_data__dev_seed=True).count(),
+            'infos': PlaceInfo.objects.filter(raw_data__dev_seed=True).count(),
             'areas': len(seeded_areas),
             'observations': CrowdData.objects.filter(
                 raw_data__dev_seed=True
@@ -169,6 +197,10 @@ class Command(BaseCommand):
         PlaceCrowdArea.objects.filter(
             Q(place_id__in=place_ids) | Q(crowd_area_id__in=area_ids)
         ).delete()
+        infos_deleted, _ = PlaceInfo.objects.filter(
+            raw_data__dev_seed=True,
+            place_id__in=place_ids,
+        ).delete()
         observations_deleted, _ = CrowdData.objects.filter(
             raw_data__dev_seed=True
         ).delete()
@@ -184,6 +216,7 @@ class Command(BaseCommand):
         return {
             'places': places_deleted,
             'sources': sources_deleted,
+            'infos': infos_deleted,
             'areas': areas_deleted,
             'observations': observations_deleted,
         }

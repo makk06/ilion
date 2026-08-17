@@ -162,6 +162,31 @@ TOUR_PLACE_ITEMS = (
 )
 
 
+CONTENT_TYPE_TAGS = {
+    '12': '관광지',
+    '14': '문화시설',
+    '15': '축제/공연/행사',
+    '25': '여행코스',
+    '28': '레포츠',
+    '32': '숙박',
+    '38': '쇼핑',
+    '39': '음식점',
+}
+
+TOUR_PLACE_INFO_ITEMS = tuple(
+    {
+        'external_id': item['contentid'],
+        'description': (
+            f"{item['title']}의 개발용 상세정보입니다. "
+            '실제 운영에서는 TourAPI 상세정보로 갱신됩니다.'
+        ),
+        'opening_hours': '방문 전 공식 운영시간을 확인하세요.',
+        'tags': [CONTENT_TYPE_TAGS.get(item['contenttypeid'], '기타')],
+    }
+    for item in TOUR_PLACE_ITEMS
+)
+
+
 CROWD_AREA_ITEMS = (
     {
         'external_id': 'POI008',

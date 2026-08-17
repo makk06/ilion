@@ -111,6 +111,7 @@ def _visible_places():
             ),
         )
         .filter(Q(_has_any_source=False) | Q(_has_active_source=True))
+        .select_related('info')
         .order_by('name', 'id')
     )
 
@@ -134,6 +135,7 @@ def _latest_crowd(place):
 
 
 def _serialize_place(place, *, detail=False, distance_km=None):
+    info = getattr(place, 'info', None)
     data = {
         'id': place.id,
         'name': place.name,
@@ -147,12 +149,28 @@ def _serialize_place(place, *, detail=False, distance_km=None):
         'avg_rating': (
             float(place.avg_rating) if place.avg_rating is not None else None
         ),
+        'image_url': info.first_image_url if info and info.first_image_url else None,
         'latest_crowd': _latest_crowd(place),
     }
     if detail:
         data.update(
             {
                 'open_status': place.open_status,
+                'info': (
+                    {
+                        'description': info.description,
+                        'phone': info.phone or None,
+                        'homepage_url': info.homepage_url or None,
+                        'first_image_url': info.first_image_url or None,
+                        'opening_hours': info.opening_hours or None,
+                        'holiday_info': info.holiday_info or None,
+                        'tags': info.tags,
+                        'source': info.merged_summary_source or None,
+                        'updated_at': info.updated_at,
+                    }
+                    if info
+                    else None
+                ),
                 'created_at': place.created_at,
                 'updated_at': place.updated_at,
             }
