@@ -40,6 +40,7 @@ cp .env.example .env
 ```dotenv
 TOUR_API_SERVICE_KEY=발급받은_한국관광공사_서비스키
 SEOUL_OPEN_API_KEY=발급받은_서울_열린데이터광장_일반키
+DJANGO_ALLOWED_HOSTS=127.0.0.1,localhost
 ```
 
 `python-dotenv`가 백엔드 루트의 `.env`를 읽습니다. 서버 환경에 같은 이름의
@@ -64,6 +65,22 @@ python manage.py runserver
 ```
 
 서버가 실행되면 <http://127.0.0.1:8000/healthz>에서 API 응답을 확인할 수 있습니다.
+
+같은 네트워크의 다른 기기에서 접속하려면 먼저 개발 PC의 로컬 IP를 확인하고,
+개인 `.env`의 `DJANGO_ALLOWED_HOSTS`에 해당 IP를 추가합니다.
+
+```dotenv
+DJANGO_ALLOWED_HOSTS=127.0.0.1,localhost,내_로컬_IP
+```
+
+그런 다음 모든 네트워크 인터페이스에서 개발 서버를 실행합니다.
+
+```bash
+python manage.py runserver 0.0.0.0:8000
+```
+
+다른 기기에서는 `http://내_로컬_IP:8000/`으로 접속합니다. `내_로컬_IP`는
+실제 주소(예: `192.168.0.10`)로 바꿔 입력합니다.
 
 만약 `ModuleNotFoundError`가 뜬다면 `python -m pip install -r requirements.txt`를 입력한 뒤 서버를 재시작해보세요.
 
