@@ -1,12 +1,15 @@
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from places.models import Place
 
-from .models import Favorite, RefreshToken, User
+from .models import Favorite, Feedback, RefreshToken, User
+from .views import FEEDBACK_COOLDOWN
 
 
 def create_place(**overrides):
@@ -252,3 +255,155 @@ class FavoriteTests(TestCase):
 
         delete_response = self.client.delete(reverse('favorite-delete', args=[self.place.id]))
         self.assertEqual(delete_response.status_code, 404)
+
+
+class FeedbackTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            email='feedback@example.com',
+            password='correct-password',
+            nickname='피드백유저',
+        )
+        self.place = create_place(name='피드백 장소')
+
+        login_response = self.client.post(reverse('auth-login'), {
+            'email': 'feedback@example.com',
+            'password': 'correct-password',
+        })
+        access_token = login_response.json()['data']['access_token']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access_token}')
+
+    def test_requires_authentication(self):
+        response = APIClient().get(reverse('feedback-list-create'))
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_feedback(self):
+        response = self.client.post(reverse('feedback-list-create'), {
+            'place_id': self.place.id,
+            'feedback_type': Feedback.FeedbackType.CROWD,
+            'value': 72,
+            'memo': '생각보다 붐볐어요',
+        })
+
+        self.assertEqual(response.status_code, 201)
+        data = response.json()['data']
+        self.assertEqual(data['place_id'], self.place.id)
+        self.assertEqual(data['value'], 72)
+
+        feedback = Feedback.objects.get(user=self.user, place=self.place)
+        self.assertEqual(feedback.feedback_type, Feedback.FeedbackType.CROWD)
+        self.assertEqual(feedback.memo, '생각보다 붐볐어요')
+
+    def test_create_feedback_without_optional_fields(self):
+        response = self.client.post(reverse('feedback-list-create'), {
+            'place_id': self.place.id,
+            'feedback_type': Feedback.FeedbackType.PLACE,
+        })
+
+        self.assertEqual(response.status_code, 201)
+        feedback = Feedback.objects.get(user=self.user, place=self.place)
+        self.assertIsNone(feedback.value)
+
+    def test_rejects_value_out_of_range(self):
+        response = self.client.post(reverse('feedback-list-create'), {
+            'place_id': self.place.id,
+            'feedback_type': Feedback.FeedbackType.CROWD,
+            'value': 101,
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Feedback.objects.exists())
+
+    def test_rejects_invalid_feedback_type(self):
+        response = self.client.post(reverse('feedback-list-create'), {
+            'place_id': self.place.id,
+            'feedback_type': 'unknown',
+            'value': 50,
+        })
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_rejects_nonexistent_place(self):
+        response = self.client.post(reverse('feedback-list-create'), {
+            'place_id': 999999,
+            'feedback_type': Feedback.FeedbackType.CROWD,
+            'value': 50,
+        })
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_same_place_and_type_is_limited_to_once_a_day(self):
+        payload = {
+            'place_id': self.place.id,
+            'feedback_type': Feedback.FeedbackType.CROWD,
+            'value': 50,
+        }
+        self.assertEqual(self.client.post(reverse('feedback-list-create'), payload).status_code, 201)
+
+        second_response = self.client.post(reverse('feedback-list-create'), payload)
+        self.assertEqual(second_response.status_code, 429)
+        self.assertEqual(Feedback.objects.count(), 1)
+
+    def test_different_type_on_same_place_is_allowed(self):
+        self.client.post(reverse('feedback-list-create'), {
+            'place_id': self.place.id,
+            'feedback_type': Feedback.FeedbackType.CROWD,
+            'value': 50,
+        })
+        response = self.client.post(reverse('feedback-list-create'), {
+            'place_id': self.place.id,
+            'feedback_type': Feedback.FeedbackType.PLACE,
+            'value': 80,
+        })
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Feedback.objects.count(), 2)
+
+    def test_allowed_again_after_cooldown(self):
+        payload = {
+            'place_id': self.place.id,
+            'feedback_type': Feedback.FeedbackType.CROWD,
+            'value': 50,
+        }
+        self.client.post(reverse('feedback-list-create'), payload)
+
+        old_feedback = Feedback.objects.get()
+        Feedback.objects.filter(id=old_feedback.id).update(
+            created_at=timezone.now() - FEEDBACK_COOLDOWN - timedelta(minutes=1),
+        )
+
+        response = self.client.post(reverse('feedback-list-create'), payload)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Feedback.objects.count(), 2)
+
+    def test_list_returns_only_own_feedback_newest_first(self):
+        other_user = User.objects.create_user(
+            email='other-feedback@example.com',
+            password='correct-password',
+            nickname='다른피드백유저',
+        )
+        Feedback.objects.create(
+            user=other_user,
+            place=self.place,
+            feedback_type=Feedback.FeedbackType.CROWD,
+            value=10,
+        )
+        older = Feedback.objects.create(
+            user=self.user,
+            place=self.place,
+            feedback_type=Feedback.FeedbackType.PLACE,
+            value=20,
+        )
+        newer = Feedback.objects.create(
+            user=self.user,
+            place=self.place,
+            feedback_type=Feedback.FeedbackType.RECOMMENDATION,
+            value=30,
+        )
+
+        response = self.client.get(reverse('feedback-list-create'))
+
+        self.assertEqual(response.status_code, 200)
+        feedbacks = response.json()['data']['feedbacks']
+        self.assertEqual([item['id'] for item in feedbacks], [newer.id, older.id])

@@ -11,4 +11,5 @@ urlpatterns = [
     path('auth/nickname/random', views.RandomNicknameView.as_view(), name='auth-nickname-random'),
     path('favorites', views.FavoriteListCreateView.as_view(), name='favorite-list-create'),
     path('favorites/<int:place_id>', views.FavoriteDeleteView.as_view(), name='favorite-delete'),
+    path('feedback', views.FeedbackListCreateView.as_view(), name='feedback-list-create'),
 ]

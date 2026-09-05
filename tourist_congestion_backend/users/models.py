@@ -1,4 +1,5 @@
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from places.models import Place
@@ -63,3 +64,24 @@ class Favorite(models.Model):
 
     def __str__(self):
         return f'user {self.user_id} favorite of place {self.place_id}'
+
+
+class Feedback(models.Model):
+    class FeedbackType(models.TextChoices):
+        CROWD = 'crowd', 'Crowd'
+        RECOMMENDATION = 'recommendation', 'Recommendation'
+        PLACE = 'place', 'Place'
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='feedbacks')
+    place = models.ForeignKey(Place, on_delete=models.CASCADE, related_name='feedbacks')
+    feedback_type = models.CharField(max_length=14, choices=FeedbackType)
+    value = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        null=True,
+        blank=True,
+    )
+    memo = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'user {self.user_id} {self.feedback_type} feedback on place {self.place_id}'
