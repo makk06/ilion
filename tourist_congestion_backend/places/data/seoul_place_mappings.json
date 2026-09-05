@@ -1,0 +1,18 @@
+{
+  "catalog_version": "2026-04-14",
+  "mappings": [
+    {"place_source": "tour_api", "place_external_id": "126508", "crowd_area_external_id": "POI008"},
+    {"place_source": "tour_api", "place_external_id": "126509", "crowd_area_external_id": "POI009"},
+    {"place_source": "tour_api", "place_external_id": "132183", "crowd_area_external_id": "POI060"},
+    {"place_source": "tour_api", "place_external_id": "126537", "crowd_area_external_id": "POI066"},
+    {"place_source": "tour_api", "place_external_id": "264353", "crowd_area_external_id": "POI078"},
+    {"place_source": "tour_api", "place_external_id": "2470006", "crowd_area_external_id": "POI083"},
+    {"place_source": "tour_api", "place_external_id": "775394", "crowd_area_external_id": "POI088"},
+    {"place_source": "tour_api", "place_external_id": "129703", "crowd_area_external_id": "POI089"},
+    {"place_source": "tour_api", "place_external_id": "128611", "crowd_area_external_id": "POI101"},
+    {"place_source": "tour_api", "place_external_id": "132180", "crowd_area_external_id": "POI115"},
+    {"place_source": "tour_api", "place_external_id": "2003909", "crowd_area_external_id": "POI120"},
+    {"place_source": "tour_api", "place_external_id": "754052", "crowd_area_external_id": "POI120"},
+    {"place_source": "tour_api", "place_external_id": "126532", "crowd_area_external_id": "POI127"}
+  ]
+}

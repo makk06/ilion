@@ -1,0 +1,32 @@
+{
+  "response": {
+    "header": {
+      "resultCode": "0000",
+      "resultMsg": "OK"
+    },
+    "body": {
+      "items": {
+        "item": [
+          {
+            "contentid": "126508",
+            "contenttypeid": "12",
+            "title": "경복궁",
+            "addr1": "서울특별시 종로구 사직로 161",
+            "addr2": "세종로",
+            "mapx": "126.977016",
+            "mapy": "37.578840",
+            "lDongRegnCd": "11",
+            "lDongSignguCd": "110",
+            "lclsSystm1": "VE",
+            "lclsSystm2": "VE01",
+            "lclsSystm3": "VE010100",
+            "showflag": "1"
+          }
+        ]
+      },
+      "numOfRows": 1,
+      "pageNo": 1,
+      "totalCount": 1
+    }
+  }
+}

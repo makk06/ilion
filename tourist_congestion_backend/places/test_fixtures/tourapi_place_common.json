@@ -1,0 +1,24 @@
+{
+  "response": {
+    "header": {
+      "resultCode": "0000",
+      "resultMsg": "OK"
+    },
+    "body": {
+      "items": {
+        "item": {
+          "contentid": "126508",
+          "contenttypeid": "12",
+          "title": "경복궁",
+          "tel": "02-3700-3900",
+          "homepage": "<a href=\"https://royal.khs.go.kr/\" target=\"_blank\">경복궁</a>",
+          "firstimage": "https://example.com/gyeongbokgung.jpg",
+          "overview": "<p>조선 왕조의 법궁입니다.</p><br>역사 문화 공간입니다."
+        }
+      },
+      "numOfRows": 1,
+      "pageNo": 1,
+      "totalCount": 1
+    }
+  }
+}

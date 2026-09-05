@@ -6,6 +6,7 @@
 - 백엔드: Django
 - GitHub: <https://github.com/makk06/ilion>
 - 상세 협업 규칙: [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md)
+- 주요 기술·제품 결정: [DECISIONS.md](./DECISIONS.md)
 
 ## 프로젝트 구조
 
