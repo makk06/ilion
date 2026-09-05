@@ -9,8 +9,10 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken as SimpleJWTRefreshToken
 
-from .models import RefreshToken, User
-from .serializers import GoogleLoginSerializer, LoginSerializer, SignupSerializer
+from places.models import Place
+
+from .models import Favorite, RefreshToken, User
+from .serializers import FavoriteCreateSerializer, GoogleLoginSerializer, LoginSerializer, SignupSerializer
 from .utils import generate_random_nickname, hash_token
 
 
@@ -170,3 +172,39 @@ class RandomNicknameView(APIView):
 
     def get(self, request):
         return success_response({'nickname': _unique_random_nickname()})
+
+
+class FavoriteListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        place_ids = list(
+            Favorite.objects.filter(user=request.user)
+            .order_by('-created_at')
+            .values_list('place_id', flat=True)
+        )
+        return success_response({'place_ids': place_ids})
+
+    def post(self, request):
+        serializer = FavoriteCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(serializer.errors)
+
+        place = Place.objects.get(id=serializer.validated_data['place_id'])
+        favorite, created = Favorite.objects.get_or_create(user=request.user, place=place)
+
+        message = '즐겨찾기에 추가되었습니다.' if created else '이미 즐겨찾기에 추가된 장소입니다.'
+        status_code = http_status.HTTP_201_CREATED if created else http_status.HTTP_200_OK
+        return success_response({'place_id': favorite.place_id}, message, status_code)
+
+
+class FavoriteDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, place_id):
+        favorite = Favorite.objects.filter(user=request.user, place_id=place_id).first()
+        if favorite is None:
+            return error_response('즐겨찾기 내역이 없습니다.', http_status.HTTP_404_NOT_FOUND)
+
+        favorite.delete()
+        return success_response(message='즐겨찾기가 삭제되었습니다.')

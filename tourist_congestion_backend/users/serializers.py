@@ -2,6 +2,8 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
+from places.models import Place
+
 from .models import User
 
 
@@ -39,3 +41,12 @@ class LoginSerializer(serializers.Serializer):
 
 class GoogleLoginSerializer(serializers.Serializer):
     id_token = serializers.CharField()
+
+
+class FavoriteCreateSerializer(serializers.Serializer):
+    place_id = serializers.IntegerField()
+
+    def validate_place_id(self, value):
+        if not Place.objects.filter(id=value).exists():
+            raise serializers.ValidationError('존재하지 않는 장소입니다.')
+        return value

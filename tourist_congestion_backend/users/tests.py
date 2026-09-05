@@ -4,7 +4,23 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from .models import RefreshToken, User
+from places.models import Place
+
+from .models import Favorite, RefreshToken, User
+
+
+def create_place(**overrides):
+    fields = {
+        'name': '테스트 장소',
+        'category': '관광지',
+        'region_code': '11000',
+        'address': '서울 어딘가',
+        'latitude': '37.5665',
+        'longitude': '126.9780',
+        'indoor_outdoor': Place.IndoorOutdoor.OUTDOOR,
+    }
+    fields.update(overrides)
+    return Place.objects.create(**fields)
 
 
 class SignupTests(TestCase):
@@ -157,3 +173,82 @@ class RandomNicknameTests(TestCase):
         self.assertEqual(response.status_code, 200)
         nickname = response.json()['data']['nickname']
         self.assertFalse(User.objects.filter(nickname=nickname).exists())
+
+
+class FavoriteTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            email='fav@example.com',
+            password='correct-password',
+            nickname='즐겨찾기유저',
+        )
+        self.place = create_place(name='좋아하는 장소')
+
+        login_response = self.client.post(reverse('auth-login'), {
+            'email': 'fav@example.com',
+            'password': 'correct-password',
+        })
+        access_token = login_response.json()['data']['access_token']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access_token}')
+
+    def test_requires_authentication(self):
+        response = APIClient().get(reverse('favorite-list-create'))
+        self.assertEqual(response.status_code, 401)
+
+    def test_add_favorite(self):
+        response = self.client.post(reverse('favorite-list-create'), {'place_id': self.place.id})
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(Favorite.objects.filter(user=self.user, place=self.place).exists())
+
+    def test_add_favorite_twice_is_idempotent(self):
+        self.client.post(reverse('favorite-list-create'), {'place_id': self.place.id})
+        second_response = self.client.post(reverse('favorite-list-create'), {'place_id': self.place.id})
+
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(Favorite.objects.filter(user=self.user, place=self.place).count(), 1)
+
+    def test_add_favorite_rejects_nonexistent_place(self):
+        response = self.client.post(reverse('favorite-list-create'), {'place_id': 999999})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.json()['success'])
+
+    def test_list_favorites_returns_place_ids(self):
+        another_place = create_place(name='다른 장소')
+        Favorite.objects.create(user=self.user, place=self.place)
+        Favorite.objects.create(user=self.user, place=another_place)
+
+        response = self.client.get(reverse('favorite-list-create'))
+
+        self.assertEqual(response.status_code, 200)
+        place_ids = response.json()['data']['place_ids']
+        self.assertCountEqual(place_ids, [self.place.id, another_place.id])
+
+    def test_delete_favorite(self):
+        Favorite.objects.create(user=self.user, place=self.place)
+
+        response = self.client.delete(reverse('favorite-delete', args=[self.place.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Favorite.objects.filter(user=self.user, place=self.place).exists())
+
+    def test_delete_nonexistent_favorite_returns_404(self):
+        response = self.client.delete(reverse('favorite-delete', args=[self.place.id]))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_cannot_see_or_delete_other_users_favorite(self):
+        other_user = User.objects.create_user(
+            email='other@example.com',
+            password='correct-password',
+            nickname='다른유저',
+        )
+        Favorite.objects.create(user=other_user, place=self.place)
+
+        list_response = self.client.get(reverse('favorite-list-create'))
+        self.assertEqual(list_response.json()['data']['place_ids'], [])
+
+        delete_response = self.client.delete(reverse('favorite-delete', args=[self.place.id]))
+        self.assertEqual(delete_response.status_code, 404)

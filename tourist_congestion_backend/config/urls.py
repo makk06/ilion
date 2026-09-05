@@ -25,5 +25,5 @@ urlpatterns = [
     path('demo/', place_demo, name='place-demo'),
     path('api/', include('places.urls')),
     path('admin/', admin.site.urls),
-    path('api/auth/', include('users.urls')),
+    path('api/', include('users.urls')),
 ]
