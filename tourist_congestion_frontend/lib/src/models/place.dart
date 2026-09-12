@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'place_category.dart';
+import 'weather.dart';
 
 enum CrowdLevel { low, medium, busy, high }
 
@@ -26,7 +28,23 @@ class Place {
       this.phone,
       this.admissionFee,
       this.parking,
-      this.homepageUrl});
+      this.homepageUrl,
+      String? address,
+      this.mainCategory,
+      this.crowdScore,
+      this.indoorOutdoor = IndoorOutdoor.unknown,
+      this.weather,
+      this.tags = const [],
+      this.iconOverride})
+      : _address = address;
+  final String? _address;
+  String get address => _address ?? area;
+  final PlaceCategory? mainCategory;
+  final int? crowdScore;
+  final IndoorOutdoor indoorOutdoor;
+  final Weather? weather;
+  final List<String> tags;
+  final IconData? iconOverride;
   final int id;
   final String name, area, category, description, crowdMessage;
   final CrowdLevel? crowdLevel;
@@ -47,7 +65,8 @@ class Place {
       observedAt != null &&
       DateTime.now().toUtc().difference(observedAt!.toUtc()) >
           const Duration(hours: 1);
-  IconData get icon => Icons.place_outlined;
+  IconData get icon =>
+      iconOverride ?? mainCategory?.icon ?? Icons.place_outlined;
   String get distance =>
       distanceKm == null ? '' : '직선 ${distanceKm!.toStringAsFixed(1)}km';
   String get crowdText => switch (crowdLevel) {
@@ -76,6 +95,19 @@ class Place {
         name: json['name'] as String,
         area: json['address'] as String? ?? '',
         category: json['category'] as String? ?? '',
+        mainCategory: PlaceCategory.values
+            .where((c) =>
+                c.label == json['category'] ||
+                '${c.contentTypeId}' == '${json['content_type_id']}')
+            .firstOrNull,
+        crowdScore: number(crowd?['score'])?.round(),
+        indoorOutdoor: IndoorOutdoor.values
+                .where((v) => v.name == json['indoor_outdoor'])
+                .firstOrNull ??
+            IndoorOutdoor.unknown,
+        tags: (json['tags'] is List)
+            ? (json['tags'] as List).whereType<String>().toList()
+            : const [],
         description: info?['description'] as String? ?? '',
         latitude: number(json['latitude']),
         longitude: number(json['longitude']),

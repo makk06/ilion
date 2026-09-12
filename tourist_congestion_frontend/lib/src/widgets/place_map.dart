@@ -28,15 +28,22 @@ class PlacesMap extends StatefulWidget {
 class _PlacesMapState extends State<PlacesMap>
     with SingleTickerProviderStateMixin {
   late final MapController _controller = widget.controller ?? MapController();
-  late final AnimationController _zoomAnimation = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 220));
+  late final AnimationController _zoomAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _zoomAnimation = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 220));
+  }
+
   double? _targetZoom;
   bool _tileError = false;
   int _revision = 0;
   void _reloadTiles() => setState(() {
-    _tileError = false;
-    _revision++;
-  });
+        _tileError = false;
+        _revision++;
+      });
 
   LatLng get _center {
     if (widget.focus != null) return widget.focus!;
@@ -115,7 +122,8 @@ class _PlacesMapState extends State<PlacesMap>
             children: [
               TileLayer(
                 key: ValueKey(_revision),
-                urlTemplate: '${ApiClient.instance.baseUrl}/maps/vworld/{z}/{x}/{y}.png',
+                urlTemplate:
+                    '${ApiClient.instance.baseUrl}/maps/vworld/{z}/{x}/{y}.png',
                 // Render 256px source tiles at 128 logical pixels. Source zoom 19
                 // is the final supported level, so camera zoom stops at 18.
                 retinaMode: true,
@@ -208,4 +216,3 @@ class _PlacesMapState extends State<PlacesMap>
         ]),
       );
 }
-

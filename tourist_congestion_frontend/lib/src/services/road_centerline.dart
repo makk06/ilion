@@ -88,12 +88,15 @@ bool _compatible(RoadLine a, RoadLine b) {
 }
 
 List<Point<double>>? _pair(RoadLine a, RoadLine b, double threshold) {
-  if (!_compatible(a, b) || a.points.length < 2 || b.points.length < 2)
+  if (!_compatible(a, b) || a.points.length < 2 || b.points.length < 2) {
     return null;
+  }
   final aLength = _length(a.points), bLength = _length(b.points);
   // A small overlapping fragment must not replace an entire longer road.
   if (min(aLength, bLength) < threshold * 3 ||
-      min(aLength, bLength) / max(aLength, bLength) < .85) return null;
+      min(aLength, bLength) / max(aLength, bLength) < .85) {
+    return null;
+  }
   final direct = a.points.first.distanceTo(b.points.first) +
       a.points.last.distanceTo(b.points.last);
   final reverse = a.points.first.distanceTo(b.points.last) +

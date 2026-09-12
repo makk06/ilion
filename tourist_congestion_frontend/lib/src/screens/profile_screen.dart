@@ -7,6 +7,7 @@ import '../widgets/app_chrome.dart';
 import '../widgets/profile_recent_places.dart';
 import '../widgets/profile_points_card.dart';
 import 'auth_screen.dart';
+import 'personalized_recommendations_screen.dart';
 import 'profile_places_screens.dart';
 import 'profile_subscreens.dart';
 import 'notifications_screen.dart';
@@ -153,6 +154,8 @@ class ProfileScreen extends StatelessWidget {
               const ProfileRecentPlaces(),
               const _SectionBreak(),
               _heading('나의 여행'),
+              _menu(context, Icons.explore_outlined, '맞춤 장소 추천',
+                  const PersonalizedRecommendationsScreen()),
               _menu(context, Icons.tune_rounded, '관심 지역 및 여행 취향',
                   const PreferenceSettingsScreen(),
                   auth: true),

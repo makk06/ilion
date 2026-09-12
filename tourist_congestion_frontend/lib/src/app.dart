@@ -6,12 +6,14 @@ import 'screens/main_shell.dart';
 import 'screens/onboarding_screen.dart';
 import 'theme/app_theme.dart';
 import 'services/app_session.dart';
+import 'state/app_scope.dart';
 
 class CrowdTripApp extends StatelessWidget {
   const CrowdTripApp({super.key});
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
+  Widget build(BuildContext context) => AppScope(
+          child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: '이리ON',
         theme: AppTheme.light,
@@ -19,7 +21,7 @@ class CrowdTripApp extends StatelessWidget {
         supportedLocales: const [Locale('ko'), Locale('en')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         home: const _EntryFlow(),
-      );
+      ));
 }
 
 class _EntryFlow extends StatefulWidget {

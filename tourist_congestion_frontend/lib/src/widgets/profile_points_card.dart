@@ -46,10 +46,11 @@ class _ProfilePointsCardState extends State<ProfilePointsCard> {
         });
       }
     } catch (_) {
-      if (mounted && generation == _generation)
+      if (mounted && generation == _generation) {
         setState(() {
           _failed = true;
         });
+      }
     }
   }
 

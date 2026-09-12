@@ -290,9 +290,10 @@ class AppSession extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> savePlan(Map<String, dynamic> plan) async {
-    if (isAuthenticated)
+    if (isAuthenticated) {
       return Map<String, dynamic>.from(
           await _api.post('/plans', body: plan) as Map);
+    }
     final nextId = _guestPlans.fold<int>(
             0,
             (value, item) =>
