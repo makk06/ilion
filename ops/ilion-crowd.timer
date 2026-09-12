@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Ilion collector every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+Unit=ilion-crowd.service
+
+[Install]
+WantedBy=timers.target

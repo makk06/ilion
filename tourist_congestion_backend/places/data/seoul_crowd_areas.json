@@ -2,17 +2,610 @@
   "catalog_version": "2026-04-14",
   "source_url": "https://data.seoul.go.kr/dataList/OA-21778/A/1/datasetView.do",
   "areas": [
-    {"external_id": "POI008", "name": "경복궁", "category": "고궁·문화유산"},
-    {"external_id": "POI009", "name": "광화문·덕수궁", "category": "고궁·문화유산"},
-    {"external_id": "POI060", "name": "광장(전통)시장", "category": "발달상권"},
-    {"external_id": "POI066", "name": "북촌한옥마을", "category": "발달상권"},
-    {"external_id": "POI078", "name": "인사동", "category": "발달상권"},
-    {"external_id": "POI083", "name": "DDP(동대문디자인플라자)", "category": "발달상권"},
-    {"external_id": "POI088", "name": "광화문광장", "category": "공원"},
-    {"external_id": "POI089", "name": "국립중앙박물관·용산가족공원", "category": "공원"},
-    {"external_id": "POI101", "name": "서울숲공원", "category": "공원"},
-    {"external_id": "POI115", "name": "남대문시장", "category": "발달상권"},
-    {"external_id": "POI120", "name": "잠실롯데타워·석촌호수", "category": "발달상권"},
-    {"external_id": "POI127", "name": "올림픽공원", "category": "공원"}
+    {
+      "external_id": "POI001",
+      "name": "강남 MICE 관광특구",
+      "category": "관광특구"
+    },
+    {
+      "external_id": "POI002",
+      "name": "동대문 관광특구",
+      "category": "관광특구"
+    },
+    {
+      "external_id": "POI003",
+      "name": "명동 관광특구",
+      "category": "관광특구"
+    },
+    {
+      "external_id": "POI004",
+      "name": "이태원 관광특구",
+      "category": "관광특구"
+    },
+    {
+      "external_id": "POI005",
+      "name": "잠실 관광특구",
+      "category": "관광특구"
+    },
+    {
+      "external_id": "POI006",
+      "name": "종로·청계 관광특구",
+      "category": "관광특구"
+    },
+    {
+      "external_id": "POI007",
+      "name": "홍대 관광특구",
+      "category": "관광특구"
+    },
+    {
+      "external_id": "POI008",
+      "name": "경복궁",
+      "category": "고궁·문화유산"
+    },
+    {
+      "external_id": "POI010",
+      "name": "보신각",
+      "category": "고궁·문화유산"
+    },
+    {
+      "external_id": "POI011",
+      "name": "서울 암사동 유적",
+      "category": "고궁·문화유산"
+    },
+    {
+      "external_id": "POI012",
+      "name": "창덕궁·종묘",
+      "category": "고궁·문화유산"
+    },
+    {
+      "external_id": "POI013",
+      "name": "가산디지털단지역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI014",
+      "name": "강남역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI015",
+      "name": "건대입구역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI016",
+      "name": "고덕역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI017",
+      "name": "고속터미널역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI018",
+      "name": "교대역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI019",
+      "name": "구로디지털단지역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI020",
+      "name": "구로역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI021",
+      "name": "군자역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI023",
+      "name": "대림역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI024",
+      "name": "동대문역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI025",
+      "name": "뚝섬역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI026",
+      "name": "미아사거리역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI027",
+      "name": "발산역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI029",
+      "name": "사당역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI030",
+      "name": "삼각지역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI031",
+      "name": "서울대입구역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI032",
+      "name": "서울식물원·마곡나루역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI033",
+      "name": "서울역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI034",
+      "name": "선릉역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI035",
+      "name": "성신여대입구역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI036",
+      "name": "수유역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI037",
+      "name": "신논현역·논현역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI038",
+      "name": "신도림역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI039",
+      "name": "신림역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI040",
+      "name": "신촌·이대역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI041",
+      "name": "양재역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI042",
+      "name": "역삼역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI043",
+      "name": "연신내역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI044",
+      "name": "오목교역·목동운동장",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI045",
+      "name": "왕십리역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI046",
+      "name": "용산역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI047",
+      "name": "이태원역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI048",
+      "name": "장지역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI049",
+      "name": "장한평역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI050",
+      "name": "천호역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI051",
+      "name": "총신대입구(이수)역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI052",
+      "name": "충정로역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI053",
+      "name": "합정역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI054",
+      "name": "혜화역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI055",
+      "name": "홍대입구역(2호선)",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI056",
+      "name": "회기역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI058",
+      "name": "가락시장",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI059",
+      "name": "가로수길",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI072",
+      "name": "여의도",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI060",
+      "name": "광장(전통)시장",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI061",
+      "name": "김포공항",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI063",
+      "name": "노량진",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI064",
+      "name": "덕수궁길·정동길",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI090",
+      "name": "난지한강공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI091",
+      "name": "남산공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI066",
+      "name": "북촌한옥마을",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI067",
+      "name": "서촌",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI068",
+      "name": "성수카페거리",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI070",
+      "name": "쌍문역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI071",
+      "name": "압구정로데오거리",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI073",
+      "name": "연남동",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI074",
+      "name": "영등포 타임스퀘어",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI076",
+      "name": "용리단길",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI077",
+      "name": "이태원 앤틱가구거리",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI078",
+      "name": "인사동",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI079",
+      "name": "창동 신경제 중심지",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI080",
+      "name": "청담동 명품거리",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI081",
+      "name": "청량리 제기동 일대 전통시장",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI082",
+      "name": "해방촌·경리단길",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI083",
+      "name": "DDP(동대문디자인플라자)",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI084",
+      "name": "DMC(디지털미디어시티)",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI085",
+      "name": "강서한강공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI086",
+      "name": "고척돔",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI087",
+      "name": "광나루한강공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI088",
+      "name": "광화문광장",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI089",
+      "name": "국립중앙박물관·용산가족공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI092",
+      "name": "노들섬",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI093",
+      "name": "뚝섬한강공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI094",
+      "name": "망원한강공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI095",
+      "name": "반포한강공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI096",
+      "name": "북서울꿈의숲",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI098",
+      "name": "서리풀공원·몽마르뜨공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI100",
+      "name": "서울대공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI101",
+      "name": "서울숲공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI102",
+      "name": "아차산",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI112",
+      "name": "청계산",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI103",
+      "name": "양화한강공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI104",
+      "name": "어린이대공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI105",
+      "name": "여의도한강공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI106",
+      "name": "월드컵공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI107",
+      "name": "응봉산",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI108",
+      "name": "이촌한강공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI109",
+      "name": "잠실종합운동장",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI110",
+      "name": "잠실한강공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI111",
+      "name": "잠원한강공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI114",
+      "name": "북창동 먹자골목",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI115",
+      "name": "남대문시장",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI116",
+      "name": "익선동",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI127",
+      "name": "올림픽공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI117",
+      "name": "신정네거리역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI118",
+      "name": "잠실새내역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI119",
+      "name": "잠실역",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI120",
+      "name": "잠실롯데타워·석촌호수",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI121",
+      "name": "송리단길·호수단길",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI122",
+      "name": "신촌 스타광장",
+      "category": "발달상권"
+    },
+    {
+      "external_id": "POI123",
+      "name": "보라매공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI124",
+      "name": "서대문독립공원",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI125",
+      "name": "안양천",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI128",
+      "name": "홍제폭포",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI129",
+      "name": "송현녹지광장",
+      "category": "공원"
+    },
+    {
+      "external_id": "POI130",
+      "name": "시의회 앞",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI131",
+      "name": "숭례문",
+      "category": "인구밀집지역"
+    },
+    {
+      "external_id": "POI009",
+      "name": "광화문·덕수궁",
+      "category": "고궁·문화유산"
+    },
+    {
+      "external_id": "POI126",
+      "name": "여의서로",
+      "category": "공원"
+    }
   ]
 }

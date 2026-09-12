@@ -1,83 +1,168 @@
 import 'package:flutter/material.dart';
-
 import 'place_category.dart';
 import 'weather.dart';
+import 'crowd_estimate.dart';
 
-enum CrowdLevel {
-  low('여유'),
-  medium('보통'),
-  high('혼잡');
-
-  const CrowdLevel(this.label);
-
-  final String label;
-
-  /// 0~100 혼잡도 점수를 단계로 변환한다. 백엔드 `CrowdData` 연동 시에도
-  /// 앱에서는 이 기준 하나만 쓰도록 한곳에 모아 둔다.
-  static CrowdLevel fromScore(int score) {
-    if (score < 34) return CrowdLevel.low;
-    if (score < 67) return CrowdLevel.medium;
-    return CrowdLevel.high;
-  }
-}
+enum CrowdLevel { low, medium, busy, high }
 
 class Place {
-  const Place({
-    required this.id,
-    required this.name,
-    required this.area,
-    required this.address,
-    required this.category,
-    required this.mainCategory,
-    required this.crowdScore,
-    required this.distanceKm,
-    required this.indoorOutdoor,
-    required this.latitude,
-    required this.longitude,
-    required this.description,
-    this.weather,
-    this.tags = const <String>[],
-    this.rating,
-    this.iconOverride,
-  });
-
-  final String id;
-  final String name;
-
-  /// 짧은 행정구역 표기. 예: `서울 성동구`
-  final String area;
-
-  /// 전체 주소. 검색 결과와 상세 화면에 표기한다.
-  final String address;
-
-  /// 화면 표기용 소분류. 예: `자연 · 공원`
-  final String category;
-
-  /// 필터·추천 계산에 쓰는 대분류.
-  final PlaceCategory mainCategory;
-
-  /// 0~100 실시간 혼잡도.
-  final int crowdScore;
-
-  /// 현재 위치 기준 거리(km).
-  final double distanceKm;
-
+  const Place(
+      {required this.id,
+      required this.name,
+      this.area = '',
+      this.category = '',
+      this.crowdLevel,
+      this.description = '',
+      this.latitude,
+      this.longitude,
+      this.imageUrl,
+      this.rating,
+      this.distanceKm,
+      this.observedAt,
+      this.crowdSource,
+      this.crowdArea,
+      this.crowdMessage = '',
+      this.isReplaced = false,
+      bool isDemo = false,
+      this.openingHours,
+      this.holidays,
+      this.phone,
+      this.admissionFee,
+      this.parking,
+      this.homepageUrl,
+      String? address,
+      this.mainCategory,
+      int? crowdScore,
+      this.crowdEstimate,
+      this.openStatus,
+      this.indoorOutdoor = IndoorOutdoor.unknown,
+      this.weather,
+      this.tags = const [],
+      this.iconOverride})
+      : _address = address,
+        _legacyCrowdScore = crowdScore,
+        _legacyIsDemo = isDemo;
+  final String? _address;
+  String get address => _address ?? area;
+  final PlaceCategory? mainCategory;
+  final int? _legacyCrowdScore;
+  final CrowdEstimate? crowdEstimate;
+  final String? openStatus;
+  int? get crowdScore =>
+      crowdEstimate != null ? crowdEstimate!.score : _legacyCrowdScore;
+  double get crowdConfidence => crowdEstimate?.confidence ?? 1;
+  bool get isClosed => (crowdEstimate?.openStatus ?? openStatus) == 'CLOSED';
+  bool get canUseCrowd =>
+      crowdScore != null &&
+      !isDemo &&
+      !isClosed &&
+      !isStale &&
+      (crowdEstimate != null
+          ? crowdEstimate!.available && !crowdEstimate!.isDemo
+          : !isReplaced);
   final IndoorOutdoor indoorOutdoor;
-  final double latitude;
-  final double longitude;
-  final String description;
   final Weather? weather;
   final List<String> tags;
-  final double? rating;
   final IconData? iconOverride;
-
-  CrowdLevel get crowdLevel => CrowdLevel.fromScore(crowdScore);
-
-  String get crowdText => crowdLevel.label;
-
-  IconData get icon => iconOverride ?? mainCategory.icon;
-
-  String get distance => distanceKm < 1
-      ? '${(distanceKm * 1000).round()}m'
-      : '${distanceKm.toStringAsFixed(1)}km';
+  final int id;
+  final String name, area, category, description, crowdMessage;
+  final CrowdLevel? crowdLevel;
+  final double? latitude, longitude, rating, distanceKm;
+  final String? imageUrl,
+      crowdSource,
+      crowdArea,
+      openingHours,
+      holidays,
+      phone,
+      admissionFee,
+      parking,
+      homepageUrl;
+  final DateTime? observedAt;
+  final bool isReplaced, _legacyIsDemo;
+  bool get isDemo => _legacyIsDemo || (crowdEstimate?.isDemo ?? false);
+  bool get hasCoordinates => latitude != null && longitude != null;
+  bool get isStale =>
+      crowdEstimate?.stale ??
+      (observedAt != null &&
+          DateTime.now().toUtc().difference(observedAt!.toUtc()) >
+              const Duration(hours: 1));
+  IconData get icon =>
+      iconOverride ?? mainCategory?.icon ?? Icons.place_outlined;
+  String get distance =>
+      distanceKm == null ? '' : '직선 ${distanceKm!.toStringAsFixed(1)}km';
+  String get crowdText =>
+      crowdEstimate?.label ??
+      (crowdLevel != null ? '서울시 제공 · $_observationLabel' : _observationLabel);
+  String get _observationLabel => switch (crowdLevel) {
+        CrowdLevel.low => '여유',
+        CrowdLevel.medium => '보통',
+        CrowdLevel.busy => '약간 붐빔',
+        CrowdLevel.high => '붐빔',
+        null => '정보 없음'
+      };
+  Color get crowdColor => crowdEstimate != null
+      ? (crowdEstimate!.level?.color ?? Colors.grey)
+      : switch (crowdLevel) {
+          CrowdLevel.low => Colors.teal,
+          CrowdLevel.medium => Colors.blue,
+          CrowdLevel.busy => Colors.orange,
+          CrowdLevel.high => Colors.red,
+          null => Colors.grey
+        };
+  factory Place.fromJson(Map<String, dynamic> json) {
+    final crowd = json['latest_crowd'] as Map<String, dynamic>?;
+    final info = json['info'] as Map<String, dynamic>?;
+    double? number(dynamic value) =>
+        value == null ? null : double.tryParse('$value');
+    String? optional(dynamic value) =>
+        value == null || '$value'.trim().isEmpty ? null : '$value';
+    return Place(
+        crowdEstimate: json['crowd_estimate'] is Map
+            ? CrowdEstimate.fromJson(
+                Map<String, dynamic>.from(json['crowd_estimate']))
+            : null,
+        openStatus: json['open_status'] as String?,
+        id: (json['id'] as num).toInt(),
+        name: json['name'] as String,
+        area: json['address'] as String? ?? '',
+        category: json['category'] as String? ?? '',
+        mainCategory: PlaceCategory.values
+            .where((c) =>
+                c.label == json['category'] ||
+                '${c.contentTypeId}' == '${json['content_type_id']}')
+            .firstOrNull,
+        crowdScore: number(crowd?['score'])?.round(),
+        indoorOutdoor: IndoorOutdoor.values
+                .where((v) => v.name == json['indoor_outdoor'])
+                .firstOrNull ??
+            IndoorOutdoor.unknown,
+        tags: (json['tags'] is List)
+            ? (json['tags'] as List).whereType<String>().toList()
+            : const [],
+        description: info?['description'] as String? ?? '',
+        latitude: number(json['latitude']),
+        longitude: number(json['longitude']),
+        rating: number(json['avg_rating']),
+        distanceKm: number(json['distance_km']),
+        imageUrl: optional(json['image_url'] ?? info?['first_image_url']),
+        crowdLevel: switch (crowd?['level']) {
+          'relaxed' => CrowdLevel.low,
+          'normal' => CrowdLevel.medium,
+          'busy' => CrowdLevel.busy,
+          'crowded' => CrowdLevel.high,
+          _ => null
+        },
+        observedAt: DateTime.tryParse(crowd?['observed_at'] as String? ?? ''),
+        crowdSource: optional(crowd?['source']),
+        crowdArea: optional(crowd?['area_name']),
+        crowdMessage: crowd?['message'] as String? ?? '',
+        isReplaced: crowd?['is_replaced'] == true,
+        isDemo: crowd?['is_demo'] == true,
+        openingHours: optional(info?['opening_hours']),
+        holidays: optional(info?['holiday_info']),
+        phone: optional(info?['phone']),
+        admissionFee: optional(info?['admission_fee']),
+        parking: optional(info?['parking']),
+        homepageUrl: optional(info?['homepage_url']));
+  }
 }

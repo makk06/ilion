@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>현재 위치 주변의 관광지를 찾기 위해 위치를 사용합니다.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>후기에 첨부할 여행 사진을 선택합니다.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>후기에 첨부할 여행 사진을 촬영합니다.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

@@ -42,10 +42,10 @@ class SeoulCrowdCatalogTests(TestCase):
         catalog = load_seoul_crowd_catalog()
 
         self.assertEqual(catalog.version, '2026-04-14')
-        self.assertEqual(len(catalog.areas), 12)
+        self.assertEqual(len(catalog.areas), 121)
         self.assertEqual(len(catalog.mappings), 13)
         area_ids = {area.external_id for area in catalog.areas}
-        self.assertEqual(len(area_ids), 12)
+        self.assertEqual(len(area_ids), 121)
         self.assertIn('POI008', area_ids)
         self.assertIn('POI060', area_ids)
         self.assertTrue(
@@ -94,7 +94,7 @@ class SeoulCrowdCatalogSyncTests(TestCase):
         )
 
         calls = client_class.return_value.fetch_population.call_args_list
-        self.assertEqual([call.args[0] for call in calls], ['POI008', 'POI009'])
+        self.assertEqual([call.args[0] for call in calls], ['POI001', 'POI002'])
         self.assertIn('catalog=2026-04-14', output.getvalue())
         self.assertIn('selected=2', output.getvalue())
         self.assertFalse(CrowdArea.objects.exists())

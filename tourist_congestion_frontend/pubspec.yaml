@@ -9,6 +9,19 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
+  http: ^1.6.0
+  cupertino_icons: ^1.0.8
+  flutter_secure_storage: ^10.0.0
+  shared_preferences: ^2.5.4
+  image_picker: ^1.2.1
+  flutter_map: ^8.2.2
+  latlong2: ^0.9.1
+  geolocator: ^14.0.2
+  url_launcher: ^6.3.2
+  flutter_map_vector_tiles: ^2.8.1
 
 dev_dependencies:
   flutter_test:
@@ -17,3 +30,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/maps/simple.json

@@ -1,10 +1,19 @@
 import math
+from functools import wraps
 
+from django.db import OperationalError
+from django.conf import settings
 from django.db.models import Exists, OuterRef, Q, Subquery
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
+from django.utils import timezone
+from datetime import timedelta
 
-from places.models import CrowdData, Place, PlaceSource
+from places.models import CrowdData, Place, PlaceSource, PlaceCrowdProfile
+from places.integrations.tour_api import _first_text
+from places.regions import address_path, parse_region_path, region_tree
+from places.services.crowd_inputs import estimates_for, summary
+from places.services.crowd_estimator import LEVELS
 
 
 DEFAULT_PAGE_SIZE = 20
@@ -23,6 +32,54 @@ def _error(message, *, status=400):
         {'success': False, 'data': None, 'message': message},
         status=status,
     )
+
+
+def _database_available(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        try:
+            return view(*args, **kwargs)
+        except OperationalError:
+            return _error('데이터를 일시적으로 불러올 수 없습니다.', status=503)
+    return wrapped
+
+
+def _estimate_filter(request):
+    value = request.GET.get('estimate_level', '').strip()
+    if value and value not in LEVELS:
+        raise ValueError('estimate_level must be one of: ' + ', '.join(LEVELS))
+    if value and request.GET.get('crowd_level', '').strip():
+        raise ValueError('Use estimate_level or crowd_level, not both.')
+    return value
+
+
+def _attach_estimates(places):
+    places = list(places)
+    estimates = estimates_for(places)
+    for place in places:
+        place._crowd_estimate = estimates.get(place.pk)
+    return places
+
+
+def _record_demand(places):
+    # Aggregate interest only; no user identity or GPS trajectory is retained.
+    if not settings.CROWD_ESTIMATION_ENABLED:
+        return
+    now = timezone.now()
+    PlaceCrowdProfile.objects.filter(place_id__in=[p.pk for p in places]).filter(
+        Q(last_requested_at__isnull=True)|Q(last_requested_at__lt=now-timedelta(minutes=30))).update(last_requested_at=now)
+
+
+def _filter_estimates(queryset, value):
+    # Bound memory for nationwide filters; apply before pagination.
+    accepted, batch = [], []
+    for place in queryset.iterator(chunk_size=500):
+        batch.append(place)
+        if len(batch) == 500:
+            accepted.extend(p.pk for p in _attach_estimates(batch) if p._crowd_estimate and p._crowd_estimate['crowd_level'] == value)
+            batch = []
+    accepted.extend(p.pk for p in _attach_estimates(batch) if p._crowd_estimate and p._crowd_estimate['crowd_level'] == value)
+    return queryset.filter(pk__in=accepted)
 
 
 def _positive_int(value, *, name, default):
@@ -76,6 +133,7 @@ def _visible_places():
             _has_any_source=Exists(sources),
             _has_active_source=Exists(active_sources),
             latest_crowd_id=Subquery(latest_crowd.values('id')[:1]),
+            latest_crowd_raw_data=Subquery(latest_crowd.values('raw_data')[:1]),
             latest_crowd_area_id=Subquery(
                 latest_crowd.values('crowd_area_id')[:1]
             ),
@@ -131,11 +189,15 @@ def _latest_crowd(place):
         'population_max': place.latest_crowd_population_max,
         'observed_at': place.latest_crowd_observed_at,
         'is_replaced': place.latest_crowd_is_replaced,
+        'is_demo': bool((place.latest_crowd_raw_data or {}).get('dev_seed')),
     }
 
 
 def _serialize_place(place, *, detail=False, distance_km=None):
     info = getattr(place, 'info', None)
+    intro = (info.raw_data or {}).get('intro', {}) if info else {}
+    if not isinstance(intro, dict):
+        intro = {}
     data = {
         'id': place.id,
         'name': place.name,
@@ -152,6 +214,9 @@ def _serialize_place(place, *, detail=False, distance_km=None):
         'image_url': info.first_image_url if info and info.first_image_url else None,
         'latest_crowd': _latest_crowd(place),
     }
+    estimate = getattr(place, '_crowd_estimate', None)
+    if estimate is not None:
+        data['crowd_estimate'] = estimate if detail else summary(estimate)
     if detail:
         data.update(
             {
@@ -164,6 +229,8 @@ def _serialize_place(place, *, detail=False, distance_km=None):
                         'first_image_url': info.first_image_url or None,
                         'opening_hours': info.opening_hours or None,
                         'holiday_info': info.holiday_info or None,
+                        'admission_fee': _first_text(intro, ('usefee', 'usefeeculture', 'usefeeleports')) or None,
+                        'parking': _first_text(intro, ('parking', 'parkingculture', 'parkingleports', 'parkinglodging', 'parkingshopping', 'parkingfood')) or None,
                         'tags': info.tags,
                         'source': info.merged_summary_source or None,
                         'updated_at': info.updated_at,
@@ -210,8 +277,16 @@ def _nearby_bounding_box(latitude, longitude, radius_km):
 
 
 @require_GET
+def place_regions(request):
+    return _success({'items': region_tree(_visible_places().values_list('address', flat=True)),
+                     'coverage': 'registered_places'})
+
+
+@require_GET
+@_database_available
 def place_list(request):
     try:
+        estimate_level = _estimate_filter(request)
         page = _positive_int(request.GET.get('page'), name='page', default=1)
         page_size = _positive_int(
             request.GET.get('page_size'),
@@ -228,6 +303,7 @@ def place_list(request):
     keyword = request.GET.get('keyword', '').strip()
     category = request.GET.get('category', '').strip()
     region_code = request.GET.get('region_code', '').strip()
+    region_path = request.GET.get('region_path', '').strip()
     crowd_level = request.GET.get('crowd_level', '').strip().lower()
 
     if keyword:
@@ -238,6 +314,15 @@ def place_list(request):
         queryset = queryset.filter(category__icontains=category)
     if region_code:
         queryset = queryset.filter(region_code__startswith=region_code)
+    if region_path:
+        try:
+            selected = parse_region_path(region_path)
+        except ValueError as exc:
+            return _error(str(exc))
+        matched_ids = [pk for pk, address in queryset.values_list('pk', 'address')
+                       if address_path(address)[:len(selected)] == selected]
+        queryset = queryset.filter(pk__in=matched_ids)
+        region_path = '/'.join(selected)
     try:
         crowd_level = _validate_crowd_level(crowd_level)
     except ValueError as exc:
@@ -245,11 +330,14 @@ def place_list(request):
     if crowd_level:
         queryset = queryset.filter(latest_crowd_level=crowd_level)
 
+    if estimate_level:
+        queryset = _filter_estimates(queryset, estimate_level)
+
     total = queryset.count()
     offset = (page - 1) * page_size
     items = [
         _serialize_place(place)
-        for place in queryset[offset : offset + page_size]
+        for place in _attach_estimates(queryset[offset : offset + page_size])
     ]
     return _success(
         {
@@ -264,15 +352,19 @@ def place_list(request):
                 'keyword': keyword,
                 'category': category,
                 'region_code': region_code,
+                'region_path': region_path,
                 'crowd_level': crowd_level,
+                'estimate_level': estimate_level,
             },
         }
     )
 
 
 @require_GET
+@_database_available
 def nearby_places(request):
     try:
+        estimate_level = _estimate_filter(request)
         latitude = _finite_float(request.GET.get('latitude'), name='latitude')
         longitude = _finite_float(request.GET.get('longitude'), name='longitude')
         radius_km = _finite_float(
@@ -327,8 +419,13 @@ def nearby_places(request):
             nearby.append((distance_km, place))
     nearby.sort(key=lambda item: (item[0], item[1].name, item[1].id))
 
+    if estimate_level:
+        _attach_estimates([p for _, p in nearby])
+        nearby = [(d, p) for d, p in nearby if p._crowd_estimate and p._crowd_estimate['crowd_level'] == estimate_level]
+
     total = len(nearby)
     offset = (page - 1) * page_size
+    _attach_estimates([p for _, p in nearby[offset : offset + page_size]])
     items = [
         _serialize_place(place, distance_km=distance_km)
         for distance_km, place in nearby[offset : offset + page_size]
@@ -350,14 +447,32 @@ def nearby_places(request):
             'filters': {
                 'category': category,
                 'crowd_level': crowd_level or '',
+                'estimate_level': estimate_level,
             },
         }
     )
 
 
 @require_GET
+@_database_available
 def place_detail(request, place_id):
     place = _visible_places().filter(pk=place_id).first()
     if place is None:
         return _error('Place not found.', status=404)
+    _attach_estimates([place])
+    _record_demand([place])
     return _success(_serialize_place(place, detail=True))
+
+
+@require_GET
+@_database_available
+def place_crowd(request, place_id):
+    place = _visible_places().filter(pk=place_id).first()
+    if place is None:
+        return _error('Place not found.', status=404)
+    payload = estimates_for([place]).get(place_id)
+    _record_demand([place])
+    if payload is None:
+        payload = {'place_id': place_id, 'status': 'unavailable', 'crowd_score': None,
+                   'crowd_level': None, 'confidence': 0, 'forecast': []}
+    return _success(payload)

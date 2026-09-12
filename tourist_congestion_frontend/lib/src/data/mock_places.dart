@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
-
 import '../models/place.dart';
 import '../models/place_category.dart';
 import '../models/weather.dart';
 
-/// 백엔드 장소·혼잡도 API가 붙기 전까지 쓰는 임시 데이터.
+/// 테스트와 명시적인 데모 전용 데이터. 실제 화면은 PlaceService를 사용한다.
 /// 필드 구성은 백엔드 `Place` 모델에 맞춰 두었다.
-const _seoulWeather = Weather(condition: WeatherCondition.rain, temperatureC: 23);
+const _seoulWeather =
+    Weather(condition: WeatherCondition.rain, temperatureC: 23);
 
 const mockPlaces = <Place>[
   Place(
-    id: 'p-seoul-forest',
+    id: -1,
     name: '서울숲',
     area: '서울 성동구',
     address: '서울 성동구 뚝섬로 273',
@@ -28,7 +28,7 @@ const mockPlaces = <Place>[
     iconOverride: Icons.park_rounded,
   ),
   Place(
-    id: 'p-seongsu-cafe',
+    id: -2,
     name: '성수동 카페거리',
     area: '서울 성동구',
     address: '서울 성동구 연무장길 일대',
@@ -46,7 +46,7 @@ const mockPlaces = <Place>[
     iconOverride: Icons.local_cafe_rounded,
   ),
   Place(
-    id: 'p-gyeongbokgung',
+    id: -3,
     name: '경복궁',
     area: '서울 종로구',
     address: '서울 종로구 사직로 161',
@@ -64,7 +64,7 @@ const mockPlaces = <Place>[
     iconOverride: Icons.account_balance_rounded,
   ),
   Place(
-    id: 'p-ttukseom-park',
+    id: -4,
     name: '뚝섬한강공원',
     area: '서울 광진구',
     address: '서울 광진구 강변북로 139',
@@ -82,7 +82,7 @@ const mockPlaces = <Place>[
     iconOverride: Icons.water_rounded,
   ),
   Place(
-    id: 'p-daelim-changgo',
+    id: -5,
     name: '대림창고 갤러리',
     area: '서울 성동구',
     address: '서울 성동구 성수이로 78',
@@ -99,7 +99,7 @@ const mockPlaces = <Place>[
     rating: 4.2,
   ),
   Place(
-    id: 'p-understand-avenue',
+    id: -6,
     name: '언더스탠드에비뉴',
     area: '서울 성동구',
     address: '서울 성동구 왕십리로 63',
@@ -116,7 +116,7 @@ const mockPlaces = <Place>[
     rating: 4.0,
   ),
   Place(
-    id: 'p-ddp',
+    id: -7,
     name: 'DDP 동대문디자인플라자',
     area: '서울 중구',
     address: '서울 중구 을지로 281',
@@ -133,7 +133,7 @@ const mockPlaces = <Place>[
     rating: 4.5,
   ),
   Place(
-    id: 'p-national-museum',
+    id: -8,
     name: '국립중앙박물관',
     area: '서울 용산구',
     address: '서울 용산구 서빙고로 137',
@@ -150,7 +150,7 @@ const mockPlaces = <Place>[
     rating: 4.8,
   ),
   Place(
-    id: 'p-bukchon',
+    id: -9,
     name: '북촌한옥마을',
     area: '서울 종로구',
     address: '서울 종로구 계동길 37',
@@ -167,7 +167,7 @@ const mockPlaces = <Place>[
     rating: 4.3,
   ),
   Place(
-    id: 'p-gwangjang-market',
+    id: -10,
     name: '광장시장',
     area: '서울 종로구',
     address: '서울 종로구 창경궁로 88',
@@ -184,7 +184,7 @@ const mockPlaces = <Place>[
     rating: 4.1,
   ),
   Place(
-    id: 'p-sejong-center',
+    id: -11,
     name: '세종문화회관',
     area: '서울 종로구',
     address: '서울 종로구 세종대로 175',
@@ -201,7 +201,7 @@ const mockPlaces = <Place>[
     rating: 4.6,
   ),
   Place(
-    id: 'p-ttukseom-bike',
+    id: -12,
     name: '뚝섬 자전거 대여소',
     area: '서울 광진구',
     address: '서울 광진구 자양동 한강공원',
@@ -218,7 +218,7 @@ const mockPlaces = <Place>[
     rating: 4.2,
   ),
   Place(
-    id: 'p-lotte-world-mall',
+    id: -13,
     name: '롯데월드몰',
     area: '서울 송파구',
     address: '서울 송파구 올림픽로 300',

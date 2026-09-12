@@ -1,0 +1,17 @@
+{
+  "version": "profiles-v2",
+  "hours": [0, 6, 9, 12, 15, 18, 21, 24],
+  "profiles": {
+    "day_visit": [10, 15, 35, 50, 60, 40, 20, 10],
+    "park": [10, 15, 35, 50, 60, 40, 20, 10],
+    "beach": [15, 20, 35, 50, 60, 50, 30, 15],
+    "shopping": [20, 10, 20, 45, 55, 65, 50, 20],
+    "food": [15, 10, 20, 60, 35, 65, 40, 15],
+    "unknown": [20, 15, 30, 45, 50, 45, 30, 20]
+  },
+  "legacy_categories": {"A01011200": "beach", "A02020700": "park", "A02020600": "park"},
+  "classification_categories": {"NA020900": "beach"},
+  "classification_evidence": {"NA020900": {"label": "해변. 해수욕장", "source": "KTO KorService2/lclsSystmCode2", "checked_at": "2026-09-12"}},
+  "content_types": {"12": "day_visit", "14": "day_visit", "28": "day_visit", "38": "shopping", "39": "food"},
+  "note": "Heuristic assumptions, not observed visitor statistics. New classification codes fall back to content type until reviewed."
+}

@@ -61,6 +61,7 @@ INSTALLED_APPS = [
 AUTH_USER_MODEL = 'users.User'
 
 MIDDLEWARE = [
+    'config.cors.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -96,7 +97,8 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': os.environ.get('DJANGO_DB_PATH', str(BASE_DIR / 'db.sqlite3')),
+        'OPTIONS': {'timeout': 20},
     }
 }
 
@@ -131,11 +133,17 @@ USE_I18N = True
 
 USE_TZ = True
 
+CROWD_ESTIMATION_ENABLED = os.environ.get('CROWD_ESTIMATION_ENABLED', 'true').lower() == 'true'
+CROWD_DISABLE_TREND_HORIZONS = [int(v) for v in os.environ.get('CROWD_DISABLE_TREND_HORIZONS', '').split(',') if v.strip() in ('1', '2', '3')]
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+CORS_ALLOWED_ORIGINS = [value.strip() for value in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if value.strip()]
 
 
 # Default primary key field type

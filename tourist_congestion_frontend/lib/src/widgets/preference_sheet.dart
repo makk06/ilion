@@ -4,6 +4,7 @@ import '../models/place_category.dart';
 import '../models/user_preference.dart';
 import '../state/app_scope.dart';
 import '../theme/app_theme.dart';
+import 'activity_data.dart';
 
 /// 여행 취향 설정 화면(바텀시트).
 ///
@@ -30,6 +31,7 @@ class PreferenceSheet extends StatefulWidget {
 
 class _PreferenceSheetState extends State<PreferenceSheet> {
   UserPreference? _editing;
+  bool _saving = false;
 
   UserPreference get _draft => _editing!;
 
@@ -39,9 +41,16 @@ class _PreferenceSheetState extends State<PreferenceSheet> {
     _editing ??= AppScope.read(context).preferenceStore.preference;
   }
 
-  void _apply() {
-    AppScope.read(context).preferenceStore.update(_draft);
-    Navigator.of(context).pop();
+  Future<void> _apply() async {
+    setState(() => _saving = true);
+    try {
+      await AppScope.read(context).preferenceStore.update(_draft);
+      if (mounted) Navigator.of(context).pop();
+    } catch (error) {
+      if (mounted) activityError(context, error);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -149,8 +158,8 @@ class _PreferenceSheetState extends State<PreferenceSheet> {
                                 next.remove(category);
                               }
                               setState(
-                                () => _editing = _draft.copyWith(
-                                    favoriteCategories: next),
+                                () => _editing =
+                                    _draft.copyWith(favoriteCategories: next),
                               );
                             },
                           ),
@@ -159,7 +168,8 @@ class _PreferenceSheetState extends State<PreferenceSheet> {
                     const SizedBox(height: 24),
                     _SectionTitle(
                       title: '이동 가능 거리',
-                      description: '${_draft.maxDistanceKm.toStringAsFixed(0)}km 이내',
+                      description:
+                          '${_draft.maxDistanceKm.toStringAsFixed(0)}km 이내',
                     ),
                     Slider(
                       value: _draft.maxDistanceKm,
@@ -209,7 +219,7 @@ class _PreferenceSheetState extends State<PreferenceSheet> {
                 child: SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: _apply,
+                    onPressed: _saving ? null : _apply,
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 15),
                       shape: RoundedRectangleBorder(

@@ -51,15 +51,19 @@ class RecommendationEngine {
     for (final place in places) {
       if (place.id == anchor?.id) continue;
       if (category != null && place.mainCategory != category) continue;
-      if (place.distanceKm > preference.maxDistanceKm) continue;
+      if (place.distanceKm != null &&
+          place.distanceKm! > preference.maxDistanceKm) {
+        continue;
+      }
 
       double? anchorDistanceKm;
       if (anchor != null) {
+        if (!anchor.hasCoordinates || !place.hasCoordinates) continue;
         anchorDistanceKm = distanceKmBetween(
-          anchor.latitude,
-          anchor.longitude,
-          place.latitude,
-          place.longitude,
+          anchor.latitude!,
+          anchor.longitude!,
+          place.latitude!,
+          place.longitude!,
         );
         if (anchorDistanceKm > anchorRadiusKm) continue;
       }
@@ -92,11 +96,21 @@ class RecommendationEngine {
     final distanceFit = _distanceFit(place, preference);
     final weatherFit = _weatherFit(place, preference);
 
-    var total = crowdFit * _crowdWeight +
-        categoryFit * _categoryWeight +
-        typeFit * _typeWeight +
-        distanceFit * _distanceWeight +
-        weatherFit * _weatherWeight;
+    final signals = <(double?, double)>[
+      (crowdFit, _crowdWeight),
+      (categoryFit, _categoryWeight),
+      (typeFit, _typeWeight),
+      (distanceFit, _distanceWeight),
+      (weatherFit, _weatherWeight),
+    ];
+    var sum = 0.0;
+    var weight = 0.0;
+    for (final signal in signals) {
+      if (signal.$1 == null) continue;
+      sum += signal.$1! * signal.$2;
+      weight += signal.$2;
+    }
+    var total = weight == 0 ? 0.0 : sum / weight;
 
     if (anchor != null) {
       // 대안 추천에서는 "원래 장소와 얼마나 닮았고 얼마나 가까운지"를 섞는다.
@@ -129,36 +143,46 @@ class RecommendationEngine {
   /// 혼잡도 적합도.
   /// 원하는 수준보다 붐비면 크게 깎고, 반대로 너무 한산한 경우는
   /// "활기찬 곳을 좋아하는 사용자"에게만 조금 깎는다.
-  double _crowdFit(Place place, UserPreference preference) {
+  double? _crowdFit(Place place, UserPreference preference) {
+    if (!place.canUseCrowd) return null;
     final desired = preference.crowdTolerance * 100;
-    final diff = (place.crowdScore - desired) / 100;
-    if (diff > 0) return (1 - diff).clamp(0.0, 1.0);
-    return (1 - diff.abs() * preference.crowdTolerance * 0.6).clamp(0.0, 1.0);
+    final diff = (place.crowdScore! - desired) / 100;
+    final raw = diff > 0
+        ? (1 - diff).clamp(0.0, 1.0)
+        : (1 - diff.abs() * preference.crowdTolerance * 0.6).clamp(0.0, 1.0);
+    return 0.5 + place.crowdConfidence * (raw - 0.5);
   }
 
-  double _categoryFit(Place place, UserPreference preference) {
+  double? _categoryFit(Place place, UserPreference preference) {
+    if (place.mainCategory == null) return null;
     if (preference.favoriteCategories.isEmpty) return 0.6;
     return preference.favoriteCategories.contains(place.mainCategory)
         ? 1.0
         : 0.25;
   }
 
-  double _typeFit(Place place, UserPreference preference) {
+  double? _typeFit(Place place, UserPreference preference) {
+    if (place.indoorOutdoor == IndoorOutdoor.unknown) return null;
     if (preference.typePreference == PlaceTypePreference.any) return 0.75;
-    if (place.indoorOutdoor == IndoorOutdoor.unknown) return 0.6;
+    if (place.indoorOutdoor == IndoorOutdoor.unknown) return null;
     final wantsIndoor = preference.typePreference == PlaceTypePreference.indoor;
     final isIndoor = place.indoorOutdoor == IndoorOutdoor.indoor;
     return wantsIndoor == isIndoor ? 1.0 : 0.2;
   }
 
-  double _distanceFit(Place place, UserPreference preference) {
+  double? _distanceFit(Place place, UserPreference preference) {
+    if (place.distanceKm == null) return null;
     if (preference.maxDistanceKm <= 0) return 0.0;
-    return (1 - place.distanceKm / preference.maxDistanceKm).clamp(0.0, 1.0);
+    return (1 - place.distanceKm! / preference.maxDistanceKm).clamp(0.0, 1.0);
   }
 
-  double _weatherFit(Place place, UserPreference preference) {
+  double? _weatherFit(Place place, UserPreference preference) {
     final weather = place.weather;
-    if (!preference.weatherAware || weather == null) return 0.7;
+    if (!preference.weatherAware ||
+        weather == null ||
+        place.indoorOutdoor == IndoorOutdoor.unknown) {
+      return null;
+    }
     if (!weather.condition.prefersIndoor) return 0.8;
     return switch (place.indoorOutdoor) {
       IndoorOutdoor.indoor => 1.0,
@@ -176,19 +200,28 @@ class RecommendationEngine {
     required double anchorRadiusKm,
   }) {
     var score = 0.0;
-    score += place.mainCategory == anchor.mainCategory ? 0.35 : 0.1;
+    score +=
+        place.mainCategory != null && place.mainCategory == anchor.mainCategory
+            ? 0.35
+            : 0.1;
 
     final sharedTags = place.tags.toSet().intersection(anchor.tags.toSet());
     score += (sharedTags.length * 0.1).clamp(0.0, 0.2);
 
-    score += place.indoorOutdoor == anchor.indoorOutdoor ? 0.1 : 0.0;
+    score += place.indoorOutdoor != IndoorOutdoor.unknown &&
+            place.indoorOutdoor == anchor.indoorOutdoor
+        ? 0.1
+        : 0.0;
 
     final proximity =
         (1 - anchorDistanceKm / anchorRadiusKm).clamp(0.0, 1.0) * 0.15;
     score += proximity;
 
-    final relief = ((anchor.crowdScore - place.crowdScore) / 100).clamp(0.0, 1.0);
-    score += relief * 0.2;
+    if (anchor.canUseCrowd && place.canUseCrowd) {
+      final relief =
+          ((anchor.crowdScore! - place.crowdScore!) / 100).clamp(0.0, 1.0);
+      score += relief * 0.2 * place.crowdConfidence * anchor.crowdConfidence;
+    }
 
     return score.clamp(0.0, 1.0);
   }
@@ -198,39 +231,44 @@ class RecommendationEngine {
     required UserPreference preference,
     Place? anchor,
     double? anchorDistanceKm,
-    required double crowdFit,
-    required double categoryFit,
-    required double typeFit,
-    required double distanceFit,
-    required double weatherFit,
+    required double? crowdFit,
+    required double? categoryFit,
+    required double? typeFit,
+    required double? distanceFit,
+    required double? weatherFit,
   }) {
     final reasons = <String>[];
 
     if (anchor != null) {
-      if (place.mainCategory == anchor.mainCategory) {
-        reasons.add('${anchor.name}과 같은 ${place.mainCategory.label}');
+      if (place.mainCategory != null &&
+          place.mainCategory == anchor.mainCategory) {
+        reasons.add('${anchor.name}과 같은 ${place.mainCategory!.label}');
       }
-      if (place.crowdScore < anchor.crowdScore - 10) {
-        reasons.add('${anchor.name}보다 한산해요');
+      if (place.crowdConfidence >= .7 &&
+          anchor.crowdConfidence >= .7 &&
+          crowdFit != null &&
+          _crowdFit(anchor, preference) != null &&
+          place.crowdScore! < anchor.crowdScore! - 10) {
+        reasons.add('${anchor.name}보다 예상 혼잡 단계가 낮아요');
       }
       if (anchorDistanceKm != null && anchorDistanceKm <= 1.5) {
         reasons.add('${anchor.name}에서 ${_formatKm(anchorDistanceKm)}');
       }
     }
 
-    if (crowdFit >= 0.8) {
+    if (crowdFit != null && crowdFit >= 0.8) {
       reasons.add(
-        place.crowdLevel == CrowdLevel.low ? '지금 여유로워요' : '원하는 혼잡도예요',
+        place.crowdEstimate != null ? '선호하는 예상 혼잡도예요' : '선호하는 관측 혼잡도예요',
       );
-    } else if (crowdFit < 0.5) {
-      reasons.add('평소보다 붐비는 편');
+    } else if (crowdFit != null && crowdFit < 0.5) {
+      reasons.add('선호하는 혼잡도보다 붐벼요');
     }
 
-    if (categoryFit >= 1.0) {
-      reasons.add('관심 카테고리 · ${place.mainCategory.label}');
+    if (categoryFit != null && categoryFit >= 1.0) {
+      reasons.add('관심 카테고리 · ${place.mainCategory!.label}');
     }
 
-    if (typeFit >= 1.0) {
+    if (typeFit != null && typeFit >= 1.0) {
       reasons.add('${place.indoorOutdoor.label} 선호와 일치');
     }
 
@@ -242,7 +280,7 @@ class RecommendationEngine {
       reasons.add('${weather.condition.label} 예보 · 실내라 안심');
     }
 
-    if (distanceFit >= 0.8) {
+    if (distanceFit != null && distanceFit >= 0.8) {
       reasons.add('${place.distance}로 가까워요');
     }
 

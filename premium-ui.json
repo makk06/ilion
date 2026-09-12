@@ -1,0 +1,12 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": ["tourist_congestion_frontend/lib", "tourist_congestion_frontend/web"],
+  "locale": "ko-KR",
+  "canonicalMap": "UX-CONTRACT.md",
+  "requiredCapabilities": ["Select/Listbox", "Date", "Form", "Scrollbar", "Toast", "CRUD"],
+  "ownership": {"Select/Listbox": "authored", "Date": "authored"},
+  "evidence": {
+    "crudFullFlow": "tourist_congestion_frontend/test/activity_flow_test.dart",
+    "failurePaths": "tourist_congestion_frontend/test/api_client_test.dart"
+  }
+}
