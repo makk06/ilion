@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/place.dart';
+import '../state/app_scope.dart';
 import '../theme/app_theme.dart';
 import 'crowd_badge.dart';
 
@@ -9,12 +10,25 @@ class PlaceCard extends StatelessWidget {
     super.key,
     required this.place,
     this.showDescription = false,
-    this.isSaved = false,
+    this.isSaved,
+    this.onTap,
+    this.onToggleSave,
+    this.trailing,
   });
 
   final Place place;
   final bool showDescription;
-  final bool isSaved;
+
+  /// 지정하지 않으면 저장 상태를 [AppScope] 에서 읽어 온다.
+  final bool? isSaved;
+
+  final VoidCallback? onTap;
+
+  /// 지정하지 않으면 하트를 눌렀을 때 저장 목록을 직접 토글한다.
+  final VoidCallback? onToggleSave;
+
+  /// 하트 대신 넣을 위젯. 저장 탭의 삭제 버튼처럼 다른 동작이 필요할 때 쓴다.
+  final Widget? trailing;
 
   Color get crowdColor => switch (place.crowdLevel) {
         CrowdLevel.low => AppColors.low,
@@ -24,11 +38,14 @@ class PlaceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scope = AppScope.watch(context);
+    final saved = isSaved ?? scope.savedStore.isSaved(place.id);
+
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: () {},
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
@@ -58,11 +75,22 @@ class PlaceCard extends StatelessWidget {
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                           ),
                         ),
-                        Icon(
-                          isSaved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                          size: 20,
-                          color: isSaved ? AppColors.high : AppColors.textMuted,
-                        ),
+                        trailing ??
+                            IconButton(
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                              tooltip: saved ? '저장 해제' : '저장',
+                              onPressed: onToggleSave ??
+                                  () => scope.savedStore.toggle(place),
+                              icon: Icon(
+                                saved
+                                    ? Icons.favorite_rounded
+                                    : Icons.favorite_border_rounded,
+                                size: 20,
+                                color: saved ? AppColors.high : AppColors.textMuted,
+                              ),
+                            ),
                       ],
                     ),
                     const SizedBox(height: 5),
@@ -74,6 +102,7 @@ class PlaceCard extends StatelessWidget {
                     Wrap(
                       spacing: 7,
                       runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         CrowdBadge(label: place.crowdText, color: crowdColor),
                         Text(place.category, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
