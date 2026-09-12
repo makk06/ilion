@@ -29,6 +29,7 @@ def companion_data(item, request):
             'place_address': item.place.address,
             'author_id': item.user_id, 'author_nickname': item.user.nickname,
             'title': item.title, 'text': item.text, 'date': item.date,
+            'time': item.time.strftime('%H:%M') if item.time is not None else None,
             'capacity': item.capacity, 'member_count': item.member_count,
             'is_joined': request.user.is_authenticated and item.members.filter(user=request.user).exists(),
             'is_mine': request.user.id == item.user_id, 'created_at': item.created_at}
@@ -117,7 +118,7 @@ class CompanionsView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get(self, request):
-        items = Companion.objects.select_related('user', 'place').order_by('date', '-created_at')
+        items = Companion.objects.select_related('user', 'place').order_by(F('date').asc(nulls_last=True), F('time').asc(nulls_last=True), '-created_at')
         if request.query_params.get('date'):
             date = serializers.DateField().run_validation(request.query_params['date'])
             items = items.filter(date=date)
@@ -159,7 +160,7 @@ class CompanionJoinView(APIView):
     @transaction.atomic
     def post(self, request, pk):
         item = get_object_or_404(Companion.objects.select_for_update(), pk=pk)
-        if item.date < timezone.localdate():
+        if item.date is not None and item.date < timezone.localdate():
             return error_response('종료된 모집에는 참여할 수 없습니다.')
         if item.members.filter(user=request.user).exists():
             return success_response(companion_data(item, request))

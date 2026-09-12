@@ -55,7 +55,7 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.background,
         body: SafeArea(
             child: AppContent(
                 child: ListenableBuilder(
@@ -129,6 +129,7 @@ class ProfileScreen extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
                   decoration: BoxDecoration(
+                      color: AppColors.surface,
                       border: Border.all(color: AppColors.border),
                       borderRadius: BorderRadius.circular(16)),
                   child: Row(

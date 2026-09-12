@@ -165,3 +165,9 @@ python manage.py map_place_crowd_area PLACE_ID AREA_CD
 서울 열린데이터광장 실시간 API는 공식적으로 `openapi.seoul.go.kr:8088`의
 HTTP 엔드포인트를 제공합니다. 키가 URL에 포함되므로 애플리케이션은 요청 URL과
 외부 라이브러리 예외를 로그에 출력하지 않습니다.
+
+## 전국 관광지 혼잡도 추정
+
+KTO 장소·행사, 서울 공식 121개 영역, 기상청·공휴일을 사용하는 설명 가능한 현재 및 1~3시간 추정을 지원합니다. 서울 외 지역은 낮은 신뢰도 초기 가정이며 방문객 수를 생성하지 않습니다. 기존 `latest_crowd`와 새 `crowd_estimate`를 구분합니다.
+
+초기 적재, 인증·예산 확인, OS 스케줄러, 테스트 및 롤백은 [운영 안내](../docs/crowd-estimation.md)를 참고하세요.

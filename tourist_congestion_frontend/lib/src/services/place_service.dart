@@ -1,4 +1,5 @@
 import '../models/place.dart';
+import '../models/crowd_estimate.dart';
 import 'api_client.dart';
 
 class PlacePage {
@@ -20,6 +21,7 @@ class PlaceService {
           String regionCode = '',
           String regionPath = '',
           String crowdLevel = '',
+          String estimateLevel = '',
           int page = 1}) async =>
       PlacePage.fromJson(Map<String, dynamic>.from(
           await ApiClient.instance.get('/places', query: {
@@ -27,16 +29,21 @@ class PlaceService {
         'region_code': regionCode,
         'region_path': regionPath,
         'crowd_level': crowdLevel,
+        'estimate_level': estimateLevel,
         'page': '$page'
       }) as Map));
   Future<Place> detail(int id) async =>
       Place.fromJson(Map<String, dynamic>.from(
           await ApiClient.instance.get('/places/$id') as Map));
+  Future<CrowdEstimate> crowd(int id) async =>
+      CrowdEstimate.fromJson(Map<String, dynamic>.from(
+          await ApiClient.instance.get('/places/$id/crowd') as Map));
   Future<PlacePage> nearby(
           {required double latitude,
           required double longitude,
           String category = '',
           String crowdLevel = '',
+          String estimateLevel = '',
           double radiusKm = 10,
           int page = 1}) async =>
       PlacePage.fromJson(Map<String, dynamic>.from(
@@ -45,6 +52,7 @@ class PlaceService {
         'longitude': '$longitude',
         'category': category,
         'crowd_level': crowdLevel,
+        'estimate_level': estimateLevel,
         'radius_km': '$radiusKm',
         'page': '$page'
       }) as Map));

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/place.dart';
+import '../theme/app_theme.dart';
 import '../models/place_category.dart';
 import '../services/place_service.dart';
 import '../services/recommendation_engine.dart';
@@ -63,7 +64,7 @@ class _PersonalizedRecommendationsScreenState
       a == null ? (b == null ? 0 : 1) : (b == null ? -1 : a.compareTo(b));
 
   num? _crowd(Place p) =>
-      p.isDemo || p.isReplaced || p.isStale ? null : p.crowdScore;
+      !p.canUseCrowd || p.crowdConfidence < .4 ? null : p.crowdScore;
 
   @override
   Widget build(BuildContext context) {
@@ -94,16 +95,18 @@ class _PersonalizedRecommendationsScreenState
                 const Expanded(
                     child: Text('내 취향에 맞는 다음 여행',
                         style: TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.w700))),
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            height: 1.3))),
                 TextButton.icon(
                     onPressed: () => PreferenceSheet.show(context),
                     icon: const Icon(Icons.tune, size: 18),
                     label: const Text('취향 수정')),
               ]),
               const SizedBox(height: 8),
-              const Text('불러온 장소 안에서 취향에 맞춰 추천해요.\n거리·날씨는 실제 정보가 있을 때만 반영해요.',
-                  style:
-                      TextStyle(fontSize: 12, color: Colors.grey, height: 1.5)),
+              const Text('불러온 장소에서 취향에 맞춰 추천해요.\n거리·날씨는 실제 정보가 있을 때만 반영해요.',
+                  style: TextStyle(
+                      fontSize: 12, color: AppColors.textMuted, height: 1.5)),
               const SizedBox(height: 20),
               SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -121,12 +124,14 @@ class _PersonalizedRecommendationsScreenState
                               onSelected: (_) =>
                                   setState(() => _category = category))),
                   ])),
-              const SizedBox(height: 12),
+              const SizedBox(height: 20),
+              const Divider(height: 1),
+              const SizedBox(height: 8),
               Row(children: [
                 Expanded(
-                    child: Text(
-                        '추천 ${results.length}곳 · ${_places.length}곳 불러옴',
-                        style: const TextStyle(fontSize: 12))),
+                    child: Text('추천 ${results.length}곳',
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w700))),
                 PopupMenuButton<_Sort>(
                   tooltip: '추천 정렬',
                   initialValue: _sort,
@@ -153,7 +158,8 @@ class _PersonalizedRecommendationsScreenState
                 const Padding(
                     padding: EdgeInsets.only(bottom: 12),
                     child: Text('비교할 정보가 없는 장소는 뒤에 표시해요.',
-                        style: TextStyle(fontSize: 12, color: Colors.grey))),
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textMuted))),
               for (final entry in results.indexed)
                 Padding(
                     padding: const EdgeInsets.only(bottom: 12),

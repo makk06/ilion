@@ -5,3 +5,5 @@ google-auth==2.40.3
 python-dotenv==1.2.3
 requests==2.34.2
 Pillow==12.3.0
+Shapely==2.1.2
+pyshp==2.3.1

@@ -1,6 +1,6 @@
 # 장소·혼잡도 API
 
-전국 장소 데이터와 서울 일부 지역의 최신 혼잡도를 조회하는 MVP용 읽기 전용
+전국 장소 데이터·자체 예상 혼잡도와 서울 영역의 최신 관측 혼잡도를 조회하는
 API입니다. 모든 응답은 아래 공통 형식을 사용합니다.
 
 ```json
@@ -306,3 +306,21 @@ python manage.py sync_seoul_crowd_catalog --limit 3 --dry-run
 일괄 수집은 한 영역이 실패해도 나머지 영역을 계속 처리한 뒤 실패 개수를 오류로
 반환합니다. 따라서 운영 스케줄러는 부분 성공 데이터를 보존하면서도 실패 알림을
 발생시킬 수 있습니다.
+
+## 전국 자체 추정 (heuristic-v1)
+
+`GET /api/places/{id}/crowd`는 기존 success/data/message envelope로 현재 및 1·2·3시간 추정을 반환한다.
+
+- 현재: `status`, 정수 `crowd_score`, `crowd_level`, `crowd_label`, `tier`, `confidence`, `confidence_kind=evidence_quality`.
+- 해석: `estimate_kind` (prior_based / observation_assisted / historical_based), `normalization` (heuristic_prior / provider_category_bootstrap / empirical_percentile), `is_demo`, `is_stale`, `open_status`.
+- 범위·시각: `spatial_scope`, `estimated_at`, `data_as_of`, `source_population` (공급자 영역 추정 인구), `relative_to_normal`와 source_area 범위. `estimated_visitors`는 null.
+- 설명: `factors`, `sources` (provider·role·observed_at·fetched_at·예보 issued_at), `limitations`, 모델·기준선·프로파일 버전.
+- `forecast`: 각 hours_ahead·valid_at·crowd_score·crowd_level·confidence·weather_available. 평가 실패 horizon은 baseline_fallback=true.
+
+단계는 VERY_LOW(0–20), LOW(21–40), NORMAL(41–65), HIGH(66–85), VERY_HIGH(86–100). 라벨은 매우 여유 / 여유 / 보통 / 혼잡 / 매우 혼잡.
+
+목록·근처에는 `crowd_estimate` 요약, 상세에는 전체 결과를 추가한다. 기존 `latest_crowd` 4단계와 `crowd_level` 필터는 그대로다. `estimate_level`은 새 5단계 단일 값으로 필터링하며 pagination 전에 적용한다. 두 필터를 함께 전달하면 400이다.
+
+미등록·비활성 장소는 404. 필수 메타데이터가 잘못되면 200과 status=unavailable, 점수·단계 null. DB 장애는 503. 기능 설정을 끄면 기존 응답으로 복귀하고 새 전용 endpoint는 unavailable을 반환한다. 모든 조회에서 외부 API 호출은 0회다.
+
+계수·출처·수집과 평가: [운영 안내](../docs/crowd-estimation.md).

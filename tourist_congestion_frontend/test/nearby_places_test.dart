@@ -36,7 +36,7 @@ void main() {
       final query = request.url.queryParameters;
       queries.add(query);
       final unfiltered = (query['category'] ?? '').isEmpty &&
-          (query['crowd_level'] ?? '').isEmpty;
+          (query['estimate_level'] ?? '').isEmpty;
       return _page(unfiltered
           ? [
               {
@@ -54,12 +54,12 @@ void main() {
     expect(queries.first['category'], '자연');
     await tester.tap(find.text('여유로운 곳'));
     await tester.pumpAndSettle();
-    expect(queries.last['crowd_level'], 'relaxed');
+    expect(queries.last['estimate_level'], 'LOW');
     await tester.ensureVisible(find.text('주변 장소 전체 보기'));
     await tester.tap(find.text('주변 장소 전체 보기'));
     await tester.pumpAndSettle();
     expect(queries.last['category'] ?? '', '');
-    expect(queries.last['crowd_level'] ?? '', '');
+    expect(queries.last['estimate_level'] ?? '', '');
     expect(find.text('실제 주변 장소'), findsOneWidget);
     expect(find.textContaining('직선 1.2km'), findsOneWidget);
     expect(

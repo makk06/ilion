@@ -16,9 +16,14 @@ class SavedScreen extends StatelessWidget {
 
 class ReviewFeed extends StatefulWidget {
   const ReviewFeed(
-      {super.key, this.mine = false, this.placeId, this.placeName});
+      {super.key,
+      this.mine = false,
+      this.placeId,
+      this.placeName,
+      this.embedded = false});
   final bool mine;
   final int? placeId;
+  final bool embedded;
   final String? placeName;
   @override
   State<ReviewFeed> createState() => _ReviewFeedState();
@@ -30,7 +35,17 @@ class _ReviewFeedState extends State<ReviewFeed> {
   final _expanded = <int>{};
   bool _photosOnly = false;
   String _sort = 'latest';
+  final _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
   String? _loadedPlaceName;
+  bool get _community => !widget.mine && widget.placeId == null;
   static const _green = AppColors.primary;
   static const _muted = AppColors.textMuted;
 
@@ -223,8 +238,10 @@ class _ReviewFeedState extends State<ReviewFeed> {
                 borderRadius: BorderRadius.circular(12),
                 child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child:
-                        SizedBox(width: 96, height: 96, child: picture())))));
+                    child: SizedBox(
+                        width: _community ? double.infinity : 96,
+                        height: _community ? 220 : 96,
+                        child: picture())))));
   }
 
   Widget _review(Map<String, dynamic> r) {
@@ -232,8 +249,13 @@ class _ReviewFeedState extends State<ReviewFeed> {
     final text = r['text']?.toString() ?? '';
     final expanded = _expanded.contains(id);
     final date = activityDate(r['created_at']).split(' ').first;
-    return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+    return Container(
+        margin: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+            color: AppColors.surface,
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(16)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             const CircleAvatar(
@@ -257,11 +279,40 @@ class _ReviewFeedState extends State<ReviewFeed> {
                       ])
           ]),
           const SizedBox(height: 12),
-          _stars(_rating(r)),
-          if (widget.placeId == null) ...[
-            const SizedBox(height: 8),
-            Text(r['place_name']?.toString() ?? '',
-                style: const TextStyle(fontSize: 12, color: _muted))
+          if (_community) ...[
+            InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: r['place_id'] == null
+                    ? null
+                    : () => Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                            builder: (_) => ReviewFeed(
+                                placeId: (r['place_id'] as num).toInt(),
+                                placeName: r['place_name']?.toString()))),
+                child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(children: [
+                      const Icon(Icons.place_outlined, size: 18, color: _green),
+                      const SizedBox(width: 6),
+                      Expanded(
+                          child: Text(r['place_name']?.toString() ?? '방문한 장소',
+                              style: const TextStyle(
+                                  fontSize: 17, fontWeight: FontWeight.w700))),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.star_rounded, size: 16, color: _green),
+                      Text('${_rating(r)}',
+                          style: const TextStyle(fontSize: 13)),
+                      if (r['place_id'] != null)
+                        const Icon(Icons.chevron_right, size: 18),
+                    ]))),
+          ] else ...[
+            _stars(_rating(r)),
+            if (widget.placeId == null) ...[
+              const SizedBox(height: 8),
+              Text(r['place_name']?.toString() ?? '',
+                  style: const TextStyle(fontSize: 12, color: _muted))
+            ],
           ],
           const SizedBox(height: 10),
           Text(text,
@@ -301,153 +352,188 @@ class _ReviewFeedState extends State<ReviewFeed> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-      backgroundColor: Colors.white,
-      appBar: GreenAppBar(title: widget.mine ? '내 후기 관리' : '여행 후기'),
-      body: AppContent(
-          child: ActivityData(
-              key: _dataKey,
-              authenticated: widget.mine,
-              load: () => ApiClient.instance.get('/reviews', query: {
-                    if (widget.mine) 'mine': 'true',
-                    if (widget.placeId != null) 'place_id': '${widget.placeId}'
-                  }),
-              builder: (context, data, refresh) {
-                final items = activityItems(data);
-                _loadedPlaceName = widget.placeId != null && items.isNotEmpty
-                    ? items.first['place_name'] as String?
-                    : null;
-                final visible =
-                    items.where((r) => !_photosOnly || _hasPhoto(r)).toList();
-                visible.sort((a, b) {
-                  int comparison = 0;
-                  if (_sort == 'helpful') {
-                    comparison = (b['like_count'] as num? ?? 0)
-                        .compareTo(a['like_count'] as num? ?? 0);
-                  }
-                  if (_sort == 'rating') {
-                    comparison = _rating(b).compareTo(_rating(a));
-                  }
-                  return comparison != 0
-                      ? comparison
-                      : _date(b).compareTo(_date(a));
-                });
-                return ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    children: [
-                      if (widget.mine)
-                        Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('내가 작성한 후기 ${items.length}개',
-                                      style: const TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w700)),
-                                  const SizedBox(height: 6),
-                                  const Text('방문했던 장소의 후기를 확인하고 수정할 수 있어요.',
-                                      style: TextStyle(
-                                          fontSize: 12, color: _muted)),
-                                ]))
-                      else
-                        _summary(items),
-                      const Divider(
-                          height: 8, thickness: 8, color: Color(0xfff4f6f4)),
-                      Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-                          child: Row(children: [
-                            SizedBox(
-                                width: 140,
-                                child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: FilterChip(
-                                        materialTapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                        visualDensity: VisualDensity.compact,
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 6),
-                                        label: Text('사진 후기만',
-                                            style: TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w500,
-                                                color: _photosOnly
-                                                    ? Colors.white
-                                                    : const Color(0xff424b45))),
-                                        checkmarkColor: Colors.white,
-                                        selected: _photosOnly,
-                                        onSelected: (value) =>
-                                            setState(() => _photosOnly = value),
-                                        avatar: Icon(Icons.photo_outlined,
-                                            size: 16,
-                                            color: _photosOnly
-                                                ? Colors.white
-                                                : _muted),
-                                        backgroundColor: Colors.white,
-                                        selectedColor: _green,
-                                        side: BorderSide(
-                                            color: _photosOnly
-                                                ? _green
-                                                : AppColors.border),
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(20))))),
-                            const Spacer(),
-                            DropdownButtonHideUnderline(
-                                child: DropdownButton<String>(
-                                    isDense: true,
-                                    alignment: Alignment.centerRight,
-                                    value: _sort,
-                                    style: const TextStyle(
-                                        fontSize: 13, color: Color(0xff424b45)),
-                                    icon: const Icon(Icons.keyboard_arrow_down,
-                                        size: 18),
-                                    items: const [
-                                      DropdownMenuItem(
-                                          value: 'latest', child: Text('최신순')),
-                                      DropdownMenuItem(
-                                          value: 'helpful', child: Text('도움순')),
-                                      DropdownMenuItem(
-                                          value: 'rating',
-                                          child: Text('높은 평점순'))
-                                    ],
-                                    onChanged: (value) {
-                                      if (value != null) {
-                                        setState(() => _sort = value);
-                                      }
-                                    }))
-                          ])),
-                      if (visible.isEmpty)
-                        Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 40),
-                            child: Column(children: [
-                              const Icon(Icons.rate_review_outlined,
-                                  size: 30, color: _muted),
-                              const SizedBox(height: 12),
-                              Text(
-                                  items.isEmpty
-                                      ? (widget.mine
-                                          ? '아직 작성한 후기가 없어요.'
-                                          : '아직 등록된 후기가 없어요.')
-                                      : '사진이 있는 후기가 아직 없어요.',
-                                  style: const TextStyle(color: _muted)),
-                              const SizedBox(height: 8),
-                              if (_photosOnly && items.isNotEmpty)
-                                TextButton(
-                                    onPressed: () =>
-                                        setState(() => _photosOnly = false),
-                                    child: const Text('전체 후기 보기'))
-                            ])),
-                      for (final r in visible) ...[
-                        _review(r),
-                        const Divider(
-                            height: 1,
-                            indent: 20,
-                            endIndent: 20,
-                            color: Color(0xffedf0eb))
-                      ],
-                      const SizedBox(height: 24),
-                    ]);
-              })));
+  Widget build(BuildContext context) {
+    final content = ActivityData(
+        key: _dataKey,
+        authenticated: widget.mine,
+        load: () => ApiClient.instance.get('/reviews', query: {
+              if (widget.mine) 'mine': 'true',
+              if (widget.placeId != null) 'place_id': '${widget.placeId}'
+            }),
+        builder: (context, data, refresh) {
+          final items = activityItems(data);
+          _loadedPlaceName = widget.placeId != null && items.isNotEmpty
+              ? items.first['place_name'] as String?
+              : null;
+          final visible = items
+              .where((r) =>
+                  (!_photosOnly || _hasPhoto(r)) &&
+                  (!_community ||
+                      '${r['place_name']} ${r['text']} ${r['author_nickname']}'
+                          .toLowerCase()
+                          .contains(_query.toLowerCase())))
+              .toList();
+          visible.sort((a, b) {
+            int comparison = 0;
+            if (_sort == 'helpful') {
+              comparison = (b['like_count'] as num? ?? 0)
+                  .compareTo(a['like_count'] as num? ?? 0);
+            }
+            if (_sort == 'rating') {
+              comparison = _rating(b).compareTo(_rating(a));
+            }
+            return comparison != 0 ? comparison : _date(b).compareTo(_date(a));
+          });
+          final children = <Widget>[
+            if (widget.mine)
+              Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('내가 작성한 후기 ${items.length}개',
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 6),
+                        const Text('방문했던 장소의 후기를 확인하고 수정할 수 있어요.',
+                            style: TextStyle(fontSize: 12, color: _muted)),
+                      ]))
+            else if (widget.placeId != null)
+              _summary(items)
+            else
+              Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AppSearchField(
+                            controller: _search,
+                            hintText: '장소 또는 여행 후기 검색',
+                            onClear: () => setState(() => _query = ''),
+                            onChanged: (value) =>
+                                setState(() => _query = value.trim())),
+                        const SizedBox(height: 20),
+                        Text('여행자들의 후기 ${visible.length}개',
+                            style: const TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 6),
+                        const Text('다녀온 사람들의 이야기를 만나보세요.',
+                            style: TextStyle(fontSize: 13, color: _muted)),
+                      ])),
+            if (!_community)
+              const Divider(height: 8, thickness: 8, color: Color(0xfff4f6f4)),
+            Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+                child: Row(children: [
+                  SizedBox(
+                      width: 140,
+                      child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: FilterChip(
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 6),
+                              label: Text('사진 후기만',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: _photosOnly
+                                          ? Colors.white
+                                          : const Color(0xff424b45))),
+                              checkmarkColor: Colors.white,
+                              selected: _photosOnly,
+                              onSelected: (value) =>
+                                  setState(() => _photosOnly = value),
+                              avatar: Icon(Icons.photo_outlined,
+                                  size: 16,
+                                  color: _photosOnly ? Colors.white : _muted),
+                              backgroundColor: Colors.white,
+                              selectedColor: _green,
+                              side: BorderSide(
+                                  color:
+                                      _photosOnly ? _green : AppColors.border),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20))))),
+                  const Spacer(),
+                  DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                          isDense: true,
+                          alignment: Alignment.centerRight,
+                          value: _sort,
+                          style: const TextStyle(
+                              fontSize: 13, color: Color(0xff424b45)),
+                          icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+                          items: [
+                            const DropdownMenuItem(
+                                value: 'latest', child: Text('최신순')),
+                            const DropdownMenuItem(
+                                value: 'helpful', child: Text('도움순')),
+                            if (!_community)
+                              const DropdownMenuItem(
+                                  value: 'rating', child: Text('높은 평점순'))
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() => _sort = value);
+                            }
+                          }))
+                ])),
+            if (visible.isEmpty)
+              Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+                  child: Column(children: [
+                    const Icon(Icons.rate_review_outlined,
+                        size: 30, color: _muted),
+                    const SizedBox(height: 12),
+                    Text(
+                        items.isEmpty
+                            ? (widget.mine
+                                ? '아직 작성한 후기가 없어요.'
+                                : '아직 등록된 후기가 없어요.')
+                            : (_query.isNotEmpty
+                                ? '검색 결과가 없어요.'
+                                : '사진이 있는 후기가 아직 없어요.'),
+                        style: const TextStyle(color: _muted)),
+                    const SizedBox(height: 8),
+                    if (_photosOnly && items.isNotEmpty)
+                      TextButton(
+                          onPressed: () => setState(() => _photosOnly = false),
+                          child: const Text('전체 후기 보기'))
+                  ])),
+            for (final r in visible) ...[
+              _review(r),
+              if (!_community)
+                const Divider(
+                    height: 1,
+                    indent: 20,
+                    endIndent: 20,
+                    color: Color(0xffedf0eb))
+            ],
+            SizedBox(height: _community ? 88 : 24),
+          ];
+          return widget.embedded
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: children)
+              : ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: children);
+        });
+    if (widget.embedded) return content;
+    return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: GreenAppBar(title: widget.mine ? '내 후기 관리' : '여행 후기'),
+        floatingActionButton: _community
+            ? FloatingActionButton(
+                heroTag: 'review-create',
+                tooltip: '후기 작성',
+                onPressed: _edit,
+                child: const Icon(Icons.edit_outlined))
+            : null,
+        body: AppContent(child: content));
+  }
 }

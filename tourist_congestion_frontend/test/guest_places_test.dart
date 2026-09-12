@@ -54,7 +54,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('게스트가 본 장소'), findsOneWidget);
     expect(find.byType(AuthScreen), findsNothing);
-    expect(requests.every((request) => request == 'GET /api/places/7'), isTrue);
+    expect(
+        requests.every((request) =>
+            request == 'GET /api/places/7' || request == 'GET /api/reviews'),
+        isTrue);
     expect(tester.takeException(), isNull);
   });
 

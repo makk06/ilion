@@ -3,6 +3,8 @@ import '../services/api_client.dart';
 import '../services/app_session.dart';
 import '../services/place_service.dart';
 import '../models/place.dart';
+import '../theme/app_theme.dart';
+import '../widgets/place_image.dart';
 import '../widgets/activity_data.dart';
 import '../widgets/app_chrome.dart';
 import 'place_detail_screen.dart';
@@ -76,16 +78,68 @@ class _AccountPlaces extends StatelessWidget {
                                 style: TextStyle(
                                     fontSize: 12, color: Colors.grey))),
                       if (places.isEmpty)
-                        Text(recent ? '최근 본 장소가 없어요.' : '저장한 장소가 없어요.'),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 56, horizontal: 20),
+                          child: Column(children: [
+                            Container(
+                              width: 64,
+                              height: 64,
+                              decoration: const BoxDecoration(
+                                  color: AppColors.primarySoft,
+                                  shape: BoxShape.circle),
+                              child: Icon(
+                                  recent
+                                      ? Icons.history_rounded
+                                      : Icons.favorite_border_rounded,
+                                  size: 28,
+                                  color: AppColors.primary),
+                            ),
+                            const SizedBox(height: 20),
+                            Text(recent ? '최근 본 장소가 없어요.' : '저장한 장소가 없어요.',
+                                style: Theme.of(context).textTheme.titleLarge),
+                            const SizedBox(height: 8),
+                            Text(
+                                recent
+                                    ? '둘러본 장소를 여기서 다시 찾아보세요.'
+                                    : '마음에 드는 장소의 하트를 눌러\n다음 여행을 위한 목록을 만들어 보세요.',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: AppColors.textMuted, height: 1.6)),
+                          ]),
+                        ),
+                      if (places.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Text('${places.length}곳',
+                              style: Theme.of(context).textTheme.titleMedium),
+                        ),
                       ...places.map((p) => Card(
+                          margin: const EdgeInsets.only(bottom: 12),
                           child: ListTile(
-                              title: Text(p.name),
-                              subtitle: Text(p.description),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                              leading: PlaceImage(
+                                  url: p.imageUrl, width: 60, height: 64),
+                              title: Text(p.name,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700)),
+                              subtitle: Padding(
+                                  padding: const EdgeInsets.only(top: 5),
+                                  child: Text(p.area,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.textMuted))),
                               trailing: recent
                                   ? const Icon(Icons.chevron_right)
                                   : IconButton(
                                       tooltip: '저장 취소',
-                                      icon: const Icon(Icons.favorite),
+                                      icon: const Icon(Icons.favorite_rounded,
+                                          color: AppColors.primary),
                                       onPressed: () async {
                                         try {
                                           await AppSession.instance

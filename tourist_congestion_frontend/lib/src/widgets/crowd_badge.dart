@@ -37,14 +37,15 @@ class CrowdBadge extends StatelessWidget {
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           SizedBox(width: compact ? 3 : 5),
-          Text(
+          Flexible(
+              child: Text(
             label,
             style: TextStyle(
               color: color,
               fontSize: compact ? 9 : 12,
               fontWeight: FontWeight.w700,
             ),
-          ),
+          )),
         ],
       ),
     );

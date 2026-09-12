@@ -49,7 +49,8 @@ void main() {
         'photo_url': 'https://example.test/review.jpg',
       },
     ]);
-    await tester.pumpWidget(const MaterialApp(home: SavedScreen()));
+    await tester.pumpWidget(
+        const MaterialApp(home: ReviewFeed(placeId: 1, placeName: '장소')));
     await tester.pumpAndSettle();
     expect(find.text('4.0'), findsOneWidget);
     expect(tester.getTopLeft(find.text('사진 없는 최근 후기')).dy,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/place.dart';
+import '../theme/app_theme.dart';
 import 'crowd_badge.dart';
 import 'place_image.dart';
 
@@ -21,14 +22,18 @@ class PlaceCard extends StatelessWidget {
           child: Padding(
               padding: const EdgeInsets.all(12),
               child: Row(children: [
-                PlaceImage(url: place.imageUrl, width: 68, height: 74),
+                PlaceImage(url: place.imageUrl, width: 72, height: 88),
                 const SizedBox(width: 12),
                 Expanded(
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                       Text(place.name,
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              color: AppColors.text)),
+                      const SizedBox(height: 4),
                       Text(
                           [place.area, place.distance]
                               .where((e) => e.isNotEmpty)
@@ -40,13 +45,15 @@ class PlaceCard extends StatelessWidget {
                             label:
                                 '${place.isDemo ? '개발 샘플 · ' : ''}${place.crowdText}${place.isStale ? ' · 오래된 정보' : ''}',
                             color: place.crowdColor),
-                        Text(place.category)
+                        Text(place.category,
+                            style: Theme.of(context).textTheme.bodySmall)
                       ]),
                       if (showDescription && place.description.isNotEmpty)
                         Text(place.description,
                             maxLines: 3, overflow: TextOverflow.ellipsis)
                     ])),
                 if (isSaved) const Icon(Icons.favorite, color: Colors.red),
-                const Icon(Icons.chevron_right)
+                const Icon(Icons.chevron_right_rounded,
+                    size: 20, color: AppColors.textMuted)
               ]))));
 }

@@ -10,6 +10,29 @@ import 'package:tourist_congestion_frontend/src/services/api_client.dart';
 import 'package:tourist_congestion_frontend/src/services/app_session.dart';
 
 void main() {
+  testWidgets('place reviews embed in parent without a second scroll view',
+      (tester) async {
+    ApiClient.instance = ApiClient(
+        client: MockClient((request) async => http.Response(
+            jsonEncode({
+              'success': true,
+              'data': {'items': []}
+            }),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'})));
+    await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(
+            body: SingleChildScrollView(
+                child: ReviewFeed(
+                    embedded: true, placeId: 7, placeName: '경복궁')))));
+    await tester.pumpAndSettle();
+    expect(find.byType(Scaffold), findsOneWidget);
+    expect(find.byType(ListView), findsNothing);
+    expect(find.text('경복궁'), findsOneWidget);
+    expect(find.text('후기 작성'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   late List<http.Request> requests;
   setUp(() {
     requests = [];
@@ -59,7 +82,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(AuthScreen), findsNothing);
     expect(find.text('로그인 없이 읽는 후기'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, '후기 작성'));
+    expect(find.text('방문자 평균 평점'), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(find.text('다녀온 사람들의 이야기를 만나보세요.'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), '없는검색어');
+    await tester.pumpAndSettle();
+    expect(find.text('검색 결과가 없어요.'), findsOneWidget);
+    await tester.tap(find.byTooltip('검색어 지우기'));
+    await tester.pumpAndSettle();
+    expect(find.text('로그인 없이 읽는 후기'), findsOneWidget);
+    await tester.tap(find.byTooltip('후기 작성'));
     await tester.pumpAndSettle();
     expect(find.byType(AuthScreen), findsOneWidget);
     expect(requests.every((r) => r.method == 'GET'), isTrue);

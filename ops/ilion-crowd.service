@@ -1,0 +1,12 @@
+[Unit]
+Description=Ilion crowd input collection and local estimation
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ilion
+WorkingDirectory=/opt/ilion/tourist_congestion_backend
+EnvironmentFile=/opt/ilion/tourist_congestion_backend/.env
+ExecStart=/opt/ilion/.venv/bin/python manage.py collect_crowd_inputs --once --max-seconds 45
+TimeoutStartSec=600
+UMask=0077

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 import '../services/api_client.dart';
 import '../widgets/app_chrome.dart';
 import '../widgets/activity_data.dart';
@@ -45,23 +46,20 @@ class _RecommendScreenState extends State<RecommendScreen> {
           height: 36,
           padding: const EdgeInsets.symmetric(horizontal: 13),
           decoration: BoxDecoration(
-              color: active ? const Color(0xFF2E4636) : Colors.white,
+              color: active ? AppColors.primary : Colors.white,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                  color: active
-                      ? const Color(0xFF2E4636)
-                      : const Color(0xFFDFE5E0))),
+                  color: active ? AppColors.primary : AppColors.border)),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Text(label,
                 style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
-                    color: active ? Colors.white : const Color(0xFF424B45))),
+                    color: active ? Colors.white : AppColors.text)),
             if (arrow) ...[
               const SizedBox(width: 4),
               Icon(Icons.keyboard_arrow_down,
-                  size: 16,
-                  color: active ? Colors.white : const Color(0xFF79817B))
+                  size: 16, color: active ? Colors.white : AppColors.textMuted)
             ],
           ]));
 
@@ -69,6 +67,7 @@ class _RecommendScreenState extends State<RecommendScreen> {
   Widget build(BuildContext context) => Scaffold(
       appBar: GreenAppBar(title: widget.mine ? '동행 내역' : '그대도 이리온'),
       floatingActionButton: FloatingActionButton(
+          heroTag: 'companion-create',
           tooltip: '동행 모집 작성',
           onPressed: () async {
             if (!await ensureSignedIn(context) || !context.mounted) return;
@@ -85,14 +84,16 @@ class _RecommendScreenState extends State<RecommendScreen> {
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              TextField(
+              AppSearchField(
                   controller: _search,
-                  style: const TextStyle(fontSize: 14),
-                  textInputAction: TextInputAction.search,
-                  decoration: const InputDecoration(
-                      hintText: '어디로 함께 떠날까요?',
-                      prefixIcon: Icon(Icons.search, size: 20)),
-                  onChanged: (v) => setState(() => _query = v.trim())),
+                  hintText: '어디로 함께 떠날까요?',
+                  onClear: () => setState(() {
+                        _search.clear();
+                        _query = '';
+                      }),
+                  onChanged: (v) {
+                    setState(() => _query = v.trim());
+                  }),
             ])),
         Expanded(
             child: ActivityData(
@@ -118,7 +119,9 @@ class _RecommendScreenState extends State<RecommendScreen> {
                           matchesRegionPath(
                               '${r['place_address'] ?? ''}', _region) &&
                           (!_openOnly ||
-                              ((r['date'] as String).compareTo(today) >= 0 &&
+                              ((r['date'] == null ||
+                                      (r['date'] as String).compareTo(today) >=
+                                          0) &&
                                   (r['member_count'] as num) <
                                       (r['capacity'] as num))) &&
                           (_when == 'all' ||
@@ -129,20 +132,19 @@ class _RecommendScreenState extends State<RecommendScreen> {
                                           .toIso8601String()
                                           .substring(0, 10)) ||
                               (_when == 'weekend' &&
-                                  (r['date'] ==
-                                          saturday
-                                              .toIso8601String()
-                                              .substring(0, 10) ||
+                                  (r['date'] == saturday.toIso8601String().substring(0, 10) ||
                                       r['date'] ==
                                           sunday
                                               .toIso8601String()
                                               .substring(0, 10)))) &&
                           (!widget.mine ||
-                              ((r['date'] as String).compareTo(today) < 0) ==
+                              (r['date'] != null && (r['date'] as String).compareTo(today) < 0) ==
                                   _past))
                       .toList();
                   items.sort((a, b) => _soonest
-                      ? '${a['date']}'.compareTo('${b['date']}')
+                      ? "${a['date'] ?? '9999-12-31'} ${a['time'] ?? '99:99'}"
+                          .compareTo(
+                              "${b['date'] ?? '9999-12-31'} ${b['time'] ?? '99:99'}")
                       : (b['id'] as num).compareTo(a['id'] as num));
                   return ListView(
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
@@ -230,12 +232,16 @@ class _RecommendScreenState extends State<RecommendScreen> {
                               ],
                             ])),
                         const SizedBox(height: 20),
-                        const Divider(height: 1, color: Color(0xFFE8ECE9)),
+                        const Divider(height: 1, color: AppColors.border),
                         const SizedBox(height: 14),
                         Row(children: [
                           Expanded(
-                              child: Text('함께할 동행 ${items.length}개',
+                              child: Text(
+                                  widget.mine
+                                      ? '내 동행 ${items.length}개'
+                                      : '함께할 동행 ${items.length}개',
                                   style: const TextStyle(
+                                      fontSize: 16,
                                       fontWeight: FontWeight.w700))),
                           PopupMenuButton<bool>(
                               tooltip: '동행 정렬',
@@ -248,7 +254,10 @@ class _RecommendScreenState extends State<RecommendScreen> {
                                         value: false, child: Text('최신 등록순'))
                                   ],
                               child: Row(children: [
-                                Text(_soonest ? '일정 빠른순' : '최신 등록순'),
+                                Text(_soonest ? '일정 빠른순' : '최신 등록순',
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textMuted)),
                                 const Icon(Icons.expand_more, size: 18)
                               ])),
                           if (_query.isNotEmpty ||
@@ -270,19 +279,64 @@ class _RecommendScreenState extends State<RecommendScreen> {
                         if (items.isEmpty)
                           const Padding(
                               padding: EdgeInsets.all(30),
-                              child: Text('조건에 맞는 동행이 없어요.')),
-                        ...items.map((r) => Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            child: ListTile(
-                                title:
-                                    Text(r['title'] ?? r['place_name'] ?? ''),
-                                subtitle: Text(
-                                    '${r['place_name']} · ${r['date']}\n${r['author_nickname']}'),
-                                isThreeLine: true,
-                                trailing: Text(
-                                    '${r['member_count']}/${r['capacity']}명'),
-                                onTap: () => _open(r))))
+                              child: Text('조건에 맞는 동행이 없어요.\n지역이나 날짜를 바꿔보세요.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                      height: 1.7,
+                                      color: AppColors.textMuted))),
+                        ...items.map(_companionCard)
                       ]);
                 }))
       ])));
+
+  Widget _companionCard(Map<String, dynamic> item) => Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+          onTap: () => _open(item),
+          child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      const Icon(Icons.calendar_today_outlined,
+                          size: 14, color: AppColors.textMuted),
+                      const SizedBox(width: 6),
+                      Expanded(
+                          child: Text(
+                              "${item['date'] ?? '날짜 미정'} · ${item['time'] == null ? '시간 미정' : (item['time'] as String).substring(0, 5)}",
+                              style: const TextStyle(
+                                  fontSize: 12, color: AppColors.textMuted))),
+                      const SizedBox(width: 8),
+                      SoftTag('${item['member_count']}/${item['capacity']}명'),
+                    ]),
+                    const SizedBox(height: 12),
+                    Text('${item['title'] ?? item['place_name'] ?? ''}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 16,
+                            height: 1.45,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.text)),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      const Icon(Icons.place_outlined,
+                          size: 16, color: AppColors.textMuted),
+                      const SizedBox(width: 4),
+                      Expanded(
+                          child: Text('${item['place_name'] ?? ''}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 13, color: AppColors.textMuted))),
+                      const Icon(Icons.chevron_right,
+                          size: 18, color: AppColors.textMuted),
+                    ]),
+                    const SizedBox(height: 12),
+                    Text('${item['author_nickname'] ?? ''}',
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.textMuted)),
+                  ]))));
 }

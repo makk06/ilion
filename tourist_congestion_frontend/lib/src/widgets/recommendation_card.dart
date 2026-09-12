@@ -25,13 +25,7 @@ class RecommendationCard extends StatelessWidget {
 
   Place get place => recommendation.place;
 
-  Color get crowdColor => switch (place.crowdLevel) {
-        CrowdLevel.low => AppColors.low,
-        CrowdLevel.medium => AppColors.medium,
-        CrowdLevel.high => AppColors.high,
-        CrowdLevel.busy => Colors.orange,
-        null => AppColors.textMuted,
-      };
+  Color get crowdColor => place.crowdColor;
 
   @override
   Widget build(BuildContext context) {
@@ -39,12 +33,17 @@ class RecommendationCard extends StatelessWidget {
     final saved = scope.savedStore.isSaved(place.id);
 
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      margin: EdgeInsets.zero,
+      color: AppColors.surface,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: AppColors.border)),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -62,16 +61,60 @@ class RecommendationCard extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 place.name,
-                                maxLines: 1,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                     fontSize: 16, fontWeight: FontWeight.w700),
                               ),
                             ),
-                            _MatchScore(score: recommendation.score),
+                            IconButton(
+                              tooltip: saved ? '저장 해제' : '저장',
+                              onPressed: scope.savedStore.isPending(place.id)
+                                  ? null
+                                  : () async {
+                                      try {
+                                        final nowSaved = await scope.savedStore
+                                            .toggle(place);
+                                        if (!context.mounted) return;
+                                        ScaffoldMessenger.of(context)
+                                          ..hideCurrentSnackBar()
+                                          ..showSnackBar(
+                                            SnackBar(
+                                              behavior:
+                                                  SnackBarBehavior.floating,
+                                              duration:
+                                                  const Duration(seconds: 2),
+                                              content: Text(
+                                                nowSaved
+                                                    ? '${place.name} 저장했어요'
+                                                    : '${place.name} 저장을 해제했어요',
+                                              ),
+                                            ),
+                                          );
+                                      } catch (_) {
+                                        if (!context.mounted) return;
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                              content: Text(
+                                                  '저장하지 못했어요. 다시 시도해 주세요.')),
+                                        );
+                                      }
+                                    },
+                              icon: Icon(
+                                saved
+                                    ? Icons.favorite_rounded
+                                    : Icons.favorite_border_rounded,
+                                color: saved
+                                    ? AppColors.high
+                                    : AppColors.textMuted,
+                              ),
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 5),
+                        const SizedBox(height: 4),
+                        _MatchScore(score: recommendation.score),
+                        const SizedBox(height: 8),
                         Text(
                           [place.area, place.distance]
                               .where((value) => value.isNotEmpty)
@@ -119,61 +162,14 @@ class RecommendationCard extends StatelessWidget {
                   ],
                 ),
               ],
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      place.description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textMuted,
-                        height: 1.45,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  IconButton(
-                    tooltip: saved ? '저장 해제' : '저장',
-                    onPressed: scope.savedStore.isPending(place.id)
-                        ? null
-                        : () async {
-                            try {
-                              final nowSaved =
-                                  await scope.savedStore.toggle(place);
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context)
-                                ..hideCurrentSnackBar()
-                                ..showSnackBar(
-                                  SnackBar(
-                                    behavior: SnackBarBehavior.floating,
-                                    duration: const Duration(seconds: 2),
-                                    content: Text(
-                                      nowSaved
-                                          ? '${place.name} 저장했어요'
-                                          : '${place.name} 저장을 해제했어요',
-                                    ),
-                                  ),
-                                );
-                            } catch (_) {
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text('저장하지 못했어요. 다시 시도해 주세요.')),
-                              );
-                            }
-                          },
-                    icon: Icon(
-                      saved
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_border_rounded,
-                      color: saved ? AppColors.high : AppColors.textMuted,
-                    ),
-                  ),
-                ],
-              ),
+              if (place.description.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(place.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textMuted, height: 1.5)),
+              ],
             ],
           ),
         ),
@@ -191,18 +187,18 @@ class _Thumbnail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 74,
-      height: 74,
+      width: 84,
+      height: 96,
       child: Stack(
         children: [
           Container(
-            width: 74,
-            height: 74,
+            width: 84,
+            height: 96,
             decoration: BoxDecoration(
               color: AppColors.primarySoft,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: PlaceImage(url: place.imageUrl, width: 74, height: 74),
+            child: PlaceImage(url: place.imageUrl, width: 84, height: 96),
           ),
           if (rank != null)
             Positioned(
@@ -267,7 +263,7 @@ class _ReasonChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.background,
         borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: const Color(0xFFE4E7F0)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Text(
         label,

@@ -1,0 +1,35 @@
+{
+  "checked_at": "2026-09-12",
+  "account_verification": "Run verify_crowd_providers. Published limits are not account approval.",
+  "providers": {
+    "tour_api": {
+      "documentation": "https://www.data.go.kr/data/15101578/openapi.do",
+      "service": "KorService2",
+      "refresh": "Content updated as supplied; events collected every 6 hours",
+      "license": "Preserve individual content/image copyright metadata and source URLs",
+      "approved_limit_env": "TOUR_API_DAILY_LIMIT"
+    },
+    "seoul": {
+      "documentation": "https://data.seoul.go.kr/dataList/OA-21285/A/1/datasetView.do",
+      "guide": "https://data.seoul.go.kr/dataVisual/seoul/guide.do",
+      "refresh_minutes": 5,
+      "area_count": 121,
+      "license": "Source attribution: Seoul Metropolitan Government; boundaries KOGL type 1",
+      "approved_limit_env": "SEOUL_DAILY_LIMIT"
+    },
+    "kma": {
+      "documentation": "https://www.data.go.kr/data/15084084/openapi.do",
+      "service": "VilageFcstInfoService_2.0",
+      "refresh": "Hourly observation and ultra-short forecast, 8 short forecasts/day",
+      "license": "Source attribution: Korea Meteorological Administration",
+      "units": {"temperature":"C","precipitation_mm":"mm/hour","wind_speed":"m/s","humidity":"percent","precipitation_probability":"percent","precipitation_type":"KMA PTY code","sky":"KMA SKY code"},
+      "approved_limit_env": "KMA_DAILY_LIMIT"
+    },
+    "kasi": {
+      "documentation": "https://www.data.go.kr/data/15012690/openapi.do",
+      "refresh": "Current/next month daily; other months weekly",
+      "license": "Source attribution: Korea Astronomy and Space Science Institute",
+      "approved_limit_env": "HOLIDAY_DAILY_LIMIT"
+    }
+  }
+}

@@ -263,6 +263,16 @@ class TourAPIClient:
             '_type': 'json',
         }
 
+    def fetch_events_page(self, *, page_number=1, start_date='19000101', end_date=None):
+        params = {**self._base_params(), 'eventStartDate': start_date,
+                  'pageNo': page_number, 'numOfRows': 100, 'arrange': 'A'}
+        if end_date:
+            params['eventEndDate'] = end_date
+        payload = get_json(self.session, f'{self.base_url}/searchFestival2',
+                           params=params, timeout=self.timeout, provider='TourAPI')
+        body, items = _response_items(payload)
+        return items, int(body.get('totalCount', 0))
+
     def fetch_places_page(
         self,
         *,

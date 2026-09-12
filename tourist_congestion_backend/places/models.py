@@ -150,6 +150,9 @@ class PlaceSource(models.Model):
 
 
 class CrowdArea(models.Model):
+    geometry = models.JSONField(default=dict, blank=True)
+    bounds = models.JSONField(default=list, blank=True)
+    geometry_version = models.CharField(max_length=40, blank=True)
     source = models.CharField(max_length=30, choices=ExternalSource)
     external_id = models.CharField(max_length=255)
     name = models.CharField(max_length=255)
@@ -172,6 +175,12 @@ class CrowdArea(models.Model):
 
 
 class PlaceCrowdArea(models.Model):
+    match_quality = models.FloatField(default=1.0, validators=[MinValueValidator(0), MaxValueValidator(1)])
+    representativeness = models.FloatField(default=0.65, validators=[MinValueValidator(0), MaxValueValidator(1)])
+    verified = models.BooleanField(default=True)
+    is_primary = models.BooleanField(default=False)
+    valid_from = models.DateTimeField(null=True, blank=True)
+    valid_until = models.DateTimeField(null=True, blank=True)
     class MatchMethod(models.TextChoices):
         MANUAL = 'manual', 'Manual'
         COORDINATE = 'coordinate', 'Coordinate'
@@ -200,6 +209,7 @@ class PlaceCrowdArea(models.Model):
                 fields=('place', 'crowd_area'),
                 name='unique_place_crowd_area',
             ),
+            models.UniqueConstraint(fields=('place',), condition=Q(is_primary=True), name='one_primary_crowd_area'),
         ]
 
     def __str__(self):
@@ -207,6 +217,7 @@ class PlaceCrowdArea(models.Model):
 
 
 class CrowdData(models.Model):
+    fetched_at = models.DateTimeField(null=True, blank=True)
     class CrowdLevel(models.TextChoices):
         RELAXED = 'relaxed', 'Relaxed'
         NORMAL = 'normal', 'Normal'
@@ -258,3 +269,9 @@ class CrowdData(models.Model):
 
     def __str__(self):
         return f'{self.crowd_area} at {self.observed_at}'
+
+
+from .crowd_models import (  # noqa: E402,F401 -- keep the existing places app/migrations
+    CalendarDay, CollectorState, CrowdEstimate, ForecastEvaluation, HistoricalBaseline,
+    HistoricalSample, PlaceCrowdProfile, TourEvent, TransitObservation, WeatherSnapshot,
+)

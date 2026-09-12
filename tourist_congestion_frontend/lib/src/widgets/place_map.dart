@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import '../services/api_client.dart';
@@ -80,6 +81,11 @@ class _PlacesMapState extends State<PlacesMap>
     final target = ((_zoomAnimation.isAnimating ? _targetZoom : start)! + delta)
         .clamp(3.0, 18.0);
     _zoomAnimation.stop();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.move(camera.center, target);
+      _targetZoom = null;
+      return;
+    }
     _targetZoom = target;
     _zoomAnimation.removeListener(_animateZoom);
     _zoomStart = start;
@@ -141,17 +147,58 @@ class _PlacesMapState extends State<PlacesMap>
                 for (final p in widget.places.where((p) => p.hasCoordinates))
                   Marker(
                     point: LatLng(p.latitude!, p.longitude!),
-                    width: 48,
-                    height: 48,
-                    child: IconButton(
-                      tooltip: '${p.name} · ${p.crowdText}',
-                      onPressed: () => widget.onSelected(p),
-                      icon: Icon(Icons.location_on,
-                          size: p.id == widget.selectedId ? 38 : 26,
-                          color: p.id == widget.selectedId
-                              ? Theme.of(context).colorScheme.primary
-                              : const Color(0xFF6D8C80)),
-                    ),
+                    width: p.id == widget.selectedId ? 148 : 48,
+                    height: p.id == widget.selectedId ? 80 : 48,
+                    alignment: Alignment.topCenter,
+                    child: Tooltip(
+                        message: '${p.name} · ${p.crowdText}',
+                        child: Semantics(
+                            button: true,
+                            label: '${p.name} · ${p.crowdText}',
+                            selected: p.id == widget.selectedId,
+                            child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => widget.onSelected(p),
+                                child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      if (p.id == widget.selectedId)
+                                        Container(
+                                            constraints: const BoxConstraints(
+                                                maxWidth: 144),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 10, vertical: 5),
+                                            decoration: BoxDecoration(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary,
+                                                border: Border.all(
+                                                    color: Colors.white,
+                                                    width: 2),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                boxShadow: const [
+                                                  BoxShadow(
+                                                      color: Color(0x40000000),
+                                                      blurRadius: 6,
+                                                      offset: Offset(0, 2))
+                                                ]),
+                                            child: Text(p.name,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 12,
+                                                    height: 1,
+                                                    fontWeight:
+                                                        FontWeight.w700))),
+                                      SizedBox(
+                                          width: 48,
+                                          height: 48,
+                                          child: CustomPaint(
+                                              painter: _PlacePinPainter(
+                                                  p.crowdColor))),
+                                    ])))),
                   ),
                 if (widget.location != null)
                   Marker(
@@ -215,4 +262,33 @@ class _PlacesMapState extends State<PlacesMap>
                 )),
         ]),
       );
+}
+
+// One stroked outline keeps the tip and curved shoulder equally thick.
+class _PlacePinPainter extends CustomPainter {
+  const _PlacePinPainter(this.color);
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = ui.Path()
+      ..moveTo(24, 46)
+      ..cubicTo(20, 40, 7, 26, 7, 19)
+      ..cubicTo(7, -3, 41, -3, 41, 19)
+      ..cubicTo(41, 26, 28, 40, 24, 46)
+      ..close();
+    canvas.drawShadow(path, const Color(0x66000000), 3, false);
+    canvas.drawPath(path, Paint()..color = color);
+    canvas.drawPath(
+        path,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..strokeJoin = StrokeJoin.round);
+    canvas.drawCircle(const Offset(24, 18), 6, Paint()..color = Colors.white);
+  }
+
+  @override
+  bool shouldRepaint(covariant _PlacePinPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

@@ -17,6 +17,7 @@ from places.models import (
 )
 
 
+@override_settings(CROWD_ESTIMATION_ENABLED=False)
 class PlaceAPITests(TestCase):
     def setUp(self):
         now = timezone.now()

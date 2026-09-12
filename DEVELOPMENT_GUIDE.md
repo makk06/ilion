@@ -10,7 +10,7 @@
 - 핵심 기능: 실시간 혼잡도와 사용자 조건을 반영한 장소 추천
 - 필수 데이터: 한국관광공사 API
 - 프런트엔드: Flutter
-- 백엔드: 추후 팀 회의를 통해 확정
+- 백엔드: Django 6.0.6 · Django REST Framework · SQLite (Python 3.12+)
 - 지원 대상: Android 우선, 필요에 따라 iOS 및 Web 확장
 
 ## 2. 저장소 구조
@@ -26,7 +26,8 @@ Git은 `2026_tourist_congestion_app` 전체에 한 번만 연결합니다.
 │  ├─ web/
 │  └─ pubspec.yaml
 ├─ tourist_congestion_backend/    # 백엔드 서버
-│  └─ .gitkeep                    # 빈 폴더를 Git에 유지하기 위한 파일
+│  ├─ places/                    # 장소·공급자 관측·전국 혼잡도 추정
+│  └─ users/                     # 계정·활동 API
 ├─ .gitignore
 ├─ README.md
 └─ DEVELOPMENT_GUIDE.md
@@ -377,3 +378,7 @@ API 키가 실수로 GitHub에 올라갔다면 파일만 삭제하지 말고, �
 4. API 키와 비밀번호는 절대 GitHub에 올리지 않습니다.
 5. 팀이 합의한 변경 사항은 반드시 문서에 남깁니다.
 
+
+## 전국 혼잡도 개발 기준
+
+[혼잡도 운영 안내](docs/crowd-estimation.md)를 따른다. 공급자 관측과 자체 추정을 구분하며 외부 호출은 수집 명령에서만 수행한다. Django와 Flutter 테스트를 함께 실행한다. 기존 사용자 변경을 보존하는 additive migration을 사용한다.

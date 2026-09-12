@@ -37,10 +37,10 @@ class CompanionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Companion
-        fields = ['place_id', 'title', 'text', 'date', 'capacity']
+        fields = ['place_id', 'title', 'text', 'date', 'time', 'capacity']
 
     def validate_date(self, value):
-        if value < timezone.localdate():
+        if value is not None and value < timezone.localdate():
             raise serializers.ValidationError('오늘 이후 날짜를 선택해 주세요.')
         return value
 

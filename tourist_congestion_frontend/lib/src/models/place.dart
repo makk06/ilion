@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'place_category.dart';
 import 'weather.dart';
+import 'crowd_estimate.dart';
 
 enum CrowdLevel { low, medium, busy, high }
 
@@ -22,7 +23,7 @@ class Place {
       this.crowdArea,
       this.crowdMessage = '',
       this.isReplaced = false,
-      this.isDemo = false,
+      bool isDemo = false,
       this.openingHours,
       this.holidays,
       this.phone,
@@ -31,16 +32,34 @@ class Place {
       this.homepageUrl,
       String? address,
       this.mainCategory,
-      this.crowdScore,
+      int? crowdScore,
+      this.crowdEstimate,
+      this.openStatus,
       this.indoorOutdoor = IndoorOutdoor.unknown,
       this.weather,
       this.tags = const [],
       this.iconOverride})
-      : _address = address;
+      : _address = address,
+        _legacyCrowdScore = crowdScore,
+        _legacyIsDemo = isDemo;
   final String? _address;
   String get address => _address ?? area;
   final PlaceCategory? mainCategory;
-  final int? crowdScore;
+  final int? _legacyCrowdScore;
+  final CrowdEstimate? crowdEstimate;
+  final String? openStatus;
+  int? get crowdScore =>
+      crowdEstimate != null ? crowdEstimate!.score : _legacyCrowdScore;
+  double get crowdConfidence => crowdEstimate?.confidence ?? 1;
+  bool get isClosed => (crowdEstimate?.openStatus ?? openStatus) == 'CLOSED';
+  bool get canUseCrowd =>
+      crowdScore != null &&
+      !isDemo &&
+      !isClosed &&
+      !isStale &&
+      (crowdEstimate != null
+          ? crowdEstimate!.available && !crowdEstimate!.isDemo
+          : !isReplaced);
   final IndoorOutdoor indoorOutdoor;
   final Weather? weather;
   final List<String> tags;
@@ -59,30 +78,37 @@ class Place {
       parking,
       homepageUrl;
   final DateTime? observedAt;
-  final bool isReplaced, isDemo;
+  final bool isReplaced, _legacyIsDemo;
+  bool get isDemo => _legacyIsDemo || (crowdEstimate?.isDemo ?? false);
   bool get hasCoordinates => latitude != null && longitude != null;
   bool get isStale =>
-      observedAt != null &&
-      DateTime.now().toUtc().difference(observedAt!.toUtc()) >
-          const Duration(hours: 1);
+      crowdEstimate?.stale ??
+      (observedAt != null &&
+          DateTime.now().toUtc().difference(observedAt!.toUtc()) >
+              const Duration(hours: 1));
   IconData get icon =>
       iconOverride ?? mainCategory?.icon ?? Icons.place_outlined;
   String get distance =>
       distanceKm == null ? '' : '직선 ${distanceKm!.toStringAsFixed(1)}km';
-  String get crowdText => switch (crowdLevel) {
+  String get crowdText =>
+      crowdEstimate?.label ??
+      (crowdLevel != null ? '서울시 제공 · $_observationLabel' : _observationLabel);
+  String get _observationLabel => switch (crowdLevel) {
         CrowdLevel.low => '여유',
         CrowdLevel.medium => '보통',
         CrowdLevel.busy => '약간 붐빔',
         CrowdLevel.high => '붐빔',
         null => '정보 없음'
       };
-  Color get crowdColor => switch (crowdLevel) {
-        CrowdLevel.low => Colors.teal,
-        CrowdLevel.medium => Colors.blue,
-        CrowdLevel.busy => Colors.orange,
-        CrowdLevel.high => Colors.red,
-        null => Colors.grey
-      };
+  Color get crowdColor => crowdEstimate != null
+      ? (crowdEstimate!.level?.color ?? Colors.grey)
+      : switch (crowdLevel) {
+          CrowdLevel.low => Colors.teal,
+          CrowdLevel.medium => Colors.blue,
+          CrowdLevel.busy => Colors.orange,
+          CrowdLevel.high => Colors.red,
+          null => Colors.grey
+        };
   factory Place.fromJson(Map<String, dynamic> json) {
     final crowd = json['latest_crowd'] as Map<String, dynamic>?;
     final info = json['info'] as Map<String, dynamic>?;
@@ -91,6 +117,11 @@ class Place {
     String? optional(dynamic value) =>
         value == null || '$value'.trim().isEmpty ? null : '$value';
     return Place(
+        crowdEstimate: json['crowd_estimate'] is Map
+            ? CrowdEstimate.fromJson(
+                Map<String, dynamic>.from(json['crowd_estimate']))
+            : null,
+        openStatus: json['open_status'] as String?,
         id: (json['id'] as num).toInt(),
         name: json['name'] as String,
         area: json['address'] as String? ?? '',

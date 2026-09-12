@@ -41,7 +41,7 @@ class _NearbyPlacesScreenState extends State<NearbyPlacesScreen> {
           latitude: widget.place.latitude!,
           longitude: widget.place.longitude!,
           category: _sameCategory ? widget.place.category : '',
-          crowdLevel: _relaxed ? 'relaxed' : '',
+          estimateLevel: _relaxed ? 'LOW' : '',
           page: append ? _page + 1 : 1);
       if (mounted && request == _request) {
         setState(() {
@@ -160,7 +160,7 @@ class _NearbyPlacesScreenState extends State<NearbyPlacesScreen> {
                 const SizedBox(height: 8),
                 Text(
                     _relaxed
-                        ? '최근 1시간 내 실제 관측에서 여유로운 곳만 보여드려요.'
+                        ? '예상 혼잡도가 여유 단계인 곳입니다. 낮은 신뢰도도 함께 확인해 주세요.'
                         : _sameCategory && widget.place.category.isNotEmpty
                             ? '${widget.place.category} 분류의 주변 장소를 찾아드려요.'
                             : '종류에 상관없이 가까운 장소를 찾아드려요.',

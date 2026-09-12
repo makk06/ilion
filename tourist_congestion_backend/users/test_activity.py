@@ -73,6 +73,36 @@ class ActivityAPITests(APITestCase):
         self.assertEqual(self.client.patch(f'/api/companions/{pk}', {'date': str(timezone.localdate()-timedelta(days=1))}, format='json').status_code, 400)
         self.assertEqual(self.client.get('/api/companions?date=invalid').status_code, 400)
 
+    def test_companion_optional_schedule_persists_and_allows_join(self):
+        payload = {'place_id': self.place.id, 'title': 'Flexible', 'text': 'Discuss together', 'capacity': 2}
+        for schedule in ({}, {'date': None, 'time': None}, {'date': None, 'time': '14:30'}, {'date': str(timezone.localdate()), 'time': None}):
+            with self.subTest(schedule=schedule):
+                response = self.client.post('/api/companions', {**payload, **schedule}, format='json')
+                self.assertEqual(response.status_code, 201)
+                item = response.data['data']
+                detail = self.client.get(f"/api/companions/{item['id']}").json()['data']
+                self.assertEqual(detail['date'], schedule.get('date'))
+                self.assertEqual(detail['time'], schedule.get('time'))
+                self.client.force_authenticate(self.other)
+                self.assertEqual(self.client.post(f"/api/companions/{item['id']}/join").status_code, 200)
+                self.client.force_authenticate(self.owner)
+
+    def test_companion_schedule_clear_validation_and_date_filter(self):
+        item = self.companion().data['data']
+        pk = item['id']
+        self.assertIsNone(item['time'])  # Existing date-only clients remain supported.
+        response = self.client.patch(f'/api/companions/{pk}', {'time': '09:45'}, format='json')
+        self.assertEqual(response.data['data']['time'], '09:45')
+        self.assertEqual(self.client.patch(f'/api/companions/{pk}', {'time': '25:00'}, format='json').status_code, 400)
+        response = self.client.patch(f'/api/companions/{pk}', {'date': None, 'time': None}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data['data']['date'])
+        self.assertIsNone(response.data['data']['time'])
+        dated = self.companion().data['data']['id']
+        self.assertEqual([row['id'] for row in self.client.get('/api/companions').data['data']['items']], [dated, pk])
+        filtered = self.client.get(f'/api/companions?date={timezone.localdate()}').data['data']['items']
+        self.assertEqual([row['id'] for row in filtered], [dated])
+
     def test_profile_recent_plan_inquiry_private_state(self):
         self.assertEqual(self.client.patch('/api/me', {'nickname': 'updated', 'preferences': {'notifications': False}}, format='json').status_code, 200)
         self.assertEqual(self.client.get('/api/me').data['data']['nickname'], 'updated')

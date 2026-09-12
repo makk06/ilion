@@ -42,20 +42,27 @@ class GreenAppBar extends StatelessWidget implements PreferredSizeWidget {
   Size get preferredSize => const Size.fromHeight(64);
 
   @override
-  Widget build(BuildContext context) => AppBar(
-        toolbarHeight: 64,
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-        foregroundColor: AppColors.text,
-        elevation: 0,
-        automaticallyImplyLeading: leading == null,
-        leading: leading,
-        titleSpacing: leading == null ? 20 : 0,
-        title: Text(title,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-        actions: actions,
-      );
+  Widget build(BuildContext context) => ColoredBox(
+      color: AppColors.surface,
+      child: Center(
+          child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: AppBar(
+                toolbarHeight: 64,
+                backgroundColor: AppColors.surface,
+                surfaceTintColor: Colors.transparent,
+                scrolledUnderElevation: 0,
+                foregroundColor: AppColors.text,
+                elevation: 0,
+                automaticallyImplyLeading: leading == null,
+                leading: leading,
+                titleSpacing: leading == null ? 20 : 0,
+                centerTitle: false,
+                title: Text(title,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700)),
+                actions: actions,
+              ))));
 }
 
 class SoftTag extends StatelessWidget {
@@ -116,4 +123,66 @@ class _ThumbnailPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ThumbnailPainter oldDelegate) =>
       oldDelegate.dark != dark;
+}
+
+/// Shared search field: preserves IME input and restores focus after clearing.
+class AppSearchField extends StatefulWidget {
+  const AppSearchField(
+      {super.key,
+      required this.controller,
+      required this.hintText,
+      required this.onClear,
+      this.onChanged,
+      this.onSubmitted,
+      this.onSearch});
+  final TextEditingController controller;
+  final String hintText;
+  final VoidCallback onClear;
+  final ValueChanged<String>? onChanged, onSubmitted;
+  final VoidCallback? onSearch;
+  @override
+  State<AppSearchField> createState() => _AppSearchFieldState();
+}
+
+class _AppSearchFieldState extends State<AppSearchField> {
+  final _focus = FocusNode();
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<TextEditingValue>(
+        valueListenable: widget.controller,
+        builder: (context, value, _) => TextField(
+          controller: widget.controller,
+          focusNode: _focus,
+          textInputAction: TextInputAction.search,
+          style: const TextStyle(fontSize: 14, color: AppColors.text),
+          onChanged: widget.onChanged,
+          onSubmitted: widget.onSubmitted,
+          decoration: InputDecoration(
+            hintText: widget.hintText,
+            prefixIcon: widget.onSearch == null
+                ? const Icon(Icons.search_rounded,
+                    size: 22, color: AppColors.textMuted)
+                : IconButton(
+                    tooltip: '검색',
+                    onPressed: widget.onSearch,
+                    icon: const Icon(Icons.search_rounded, size: 22)),
+            suffixIcon: value.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: '검색어 지우기',
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    onPressed: () {
+                      widget.controller.clear();
+                      widget.onClear();
+                      _focus.requestFocus();
+                    }),
+          ),
+        ),
+      );
 }

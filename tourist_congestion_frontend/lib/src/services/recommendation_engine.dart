@@ -144,16 +144,13 @@ class RecommendationEngine {
   /// 원하는 수준보다 붐비면 크게 깎고, 반대로 너무 한산한 경우는
   /// "활기찬 곳을 좋아하는 사용자"에게만 조금 깎는다.
   double? _crowdFit(Place place, UserPreference preference) {
-    if (place.crowdScore == null ||
-        place.isDemo ||
-        place.isReplaced ||
-        place.isStale) {
-      return null;
-    }
+    if (!place.canUseCrowd) return null;
     final desired = preference.crowdTolerance * 100;
     final diff = (place.crowdScore! - desired) / 100;
-    if (diff > 0) return (1 - diff).clamp(0.0, 1.0);
-    return (1 - diff.abs() * preference.crowdTolerance * 0.6).clamp(0.0, 1.0);
+    final raw = diff > 0
+        ? (1 - diff).clamp(0.0, 1.0)
+        : (1 - diff.abs() * preference.crowdTolerance * 0.6).clamp(0.0, 1.0);
+    return 0.5 + place.crowdConfidence * (raw - 0.5);
   }
 
   double? _categoryFit(Place place, UserPreference preference) {
@@ -220,17 +217,10 @@ class RecommendationEngine {
         (1 - anchorDistanceKm / anchorRadiusKm).clamp(0.0, 1.0) * 0.15;
     score += proximity;
 
-    if (anchor.crowdScore != null &&
-        place.crowdScore != null &&
-        !anchor.isDemo &&
-        !place.isDemo &&
-        !anchor.isReplaced &&
-        !place.isReplaced &&
-        !anchor.isStale &&
-        !place.isStale) {
+    if (anchor.canUseCrowd && place.canUseCrowd) {
       final relief =
           ((anchor.crowdScore! - place.crowdScore!) / 100).clamp(0.0, 1.0);
-      score += relief * 0.2;
+      score += relief * 0.2 * place.crowdConfidence * anchor.crowdConfidence;
     }
 
     return score.clamp(0.0, 1.0);
@@ -254,10 +244,12 @@ class RecommendationEngine {
           place.mainCategory == anchor.mainCategory) {
         reasons.add('${anchor.name}과 같은 ${place.mainCategory!.label}');
       }
-      if (crowdFit != null &&
+      if (place.crowdConfidence >= .7 &&
+          anchor.crowdConfidence >= .7 &&
+          crowdFit != null &&
           _crowdFit(anchor, preference) != null &&
           place.crowdScore! < anchor.crowdScore! - 10) {
-        reasons.add('${anchor.name}보다 한산해요');
+        reasons.add('${anchor.name}보다 예상 혼잡 단계가 낮아요');
       }
       if (anchorDistanceKm != null && anchorDistanceKm <= 1.5) {
         reasons.add('${anchor.name}에서 ${_formatKm(anchorDistanceKm)}');
@@ -266,7 +258,7 @@ class RecommendationEngine {
 
     if (crowdFit != null && crowdFit >= 0.8) {
       reasons.add(
-        place.crowdLevel == CrowdLevel.low ? '지금 여유로워요' : '원하는 혼잡도예요',
+        place.crowdEstimate != null ? '선호하는 예상 혼잡도예요' : '선호하는 관측 혼잡도예요',
       );
     } else if (crowdFit != null && crowdFit < 0.5) {
       reasons.add('선호하는 혼잡도보다 붐벼요');

@@ -108,7 +108,7 @@ void main() {
     await tester.tap(find.text('지도'));
     await tester.pumpAndSettle();
     expect(find.byType(PlacesMap), findsOneWidget);
-    expect(find.text('테스트 관광지'), findsOneWidget);
+    expect(find.text('테스트 관광지'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 

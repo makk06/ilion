@@ -97,7 +97,8 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': os.environ.get('DJANGO_DB_PATH', str(BASE_DIR / 'db.sqlite3')),
+        'OPTIONS': {'timeout': 20},
     }
 }
 
@@ -131,6 +132,9 @@ TIME_ZONE = 'Asia/Seoul'
 USE_I18N = True
 
 USE_TZ = True
+
+CROWD_ESTIMATION_ENABLED = os.environ.get('CROWD_ESTIMATION_ENABLED', 'true').lower() == 'true'
+CROWD_DISABLE_TREND_HORIZONS = [int(v) for v in os.environ.get('CROWD_DISABLE_TREND_HORIZONS', '').split(',') if v.strip() in ('1', '2', '3')]
 
 
 # Static files (CSS, JavaScript, Images)

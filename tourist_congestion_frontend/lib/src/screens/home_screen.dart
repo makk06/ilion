@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 import '../models/place.dart';
 import '../services/place_service.dart';
 import '../services/place_location.dart';
@@ -59,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
           : await PlaceService.instance.list(
               keyword: _keyword,
               regionPath: _region,
-              crowdLevel: _crowd,
+              estimateLevel: _crowd,
               page: append ? _page + 1 : 1);
       if (!mounted || request != _request) return;
       setState(() {
@@ -134,19 +135,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       )),
                 ),
                 const SizedBox(height: 16),
-                TextField(
+                AppSearchField(
                     controller: _search,
-                    textInputAction: TextInputAction.search,
-                    decoration: InputDecoration(
-                        hintText: '관광지 또는 지역 검색',
-                        suffixIcon: IconButton(
-                            tooltip: '검색',
-                            onPressed: () {
-                              _keyword = _search.text.trim();
-                              _nearby = false;
-                              _load();
-                            },
-                            icon: const Icon(Icons.search))),
+                    hintText: '관광지 또는 지역 검색',
+                    onSearch: () {
+                      _keyword = _search.text.trim();
+                      _nearby = false;
+                      _load();
+                    },
+                    onClear: () {
+                      _search.clear();
+                      _keyword = '';
+                      _nearby = false;
+                      _load();
+                    },
                     onSubmitted: (v) {
                       _keyword = v.trim();
                       _nearby = false;
@@ -165,7 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   const EdgeInsets.symmetric(horizontal: 10),
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               textStyle: const TextStyle(fontSize: 12),
-                              side: const BorderSide(color: Color(0xFFDCE5DD)),
+                              side: const BorderSide(color: AppColors.border),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(20))),
                           onPressed: () async {
@@ -193,18 +195,18 @@ class _HomeScreenState extends State<HomeScreen> {
                           style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
-                              color: Color(0xFF3F5145)),
+                              color: AppColors.text),
                           value: _crowd,
                           items: const [
                             DropdownMenuItem(value: '', child: Text('모든 혼잡도')),
                             DropdownMenuItem(
-                                value: 'relaxed', child: Text('여유')),
+                                value: 'VERY_LOW', child: Text('매우 여유')),
+                            DropdownMenuItem(value: 'LOW', child: Text('여유')),
                             DropdownMenuItem(
-                                value: 'normal', child: Text('보통')),
+                                value: 'NORMAL', child: Text('보통')),
+                            DropdownMenuItem(value: 'HIGH', child: Text('혼잡')),
                             DropdownMenuItem(
-                                value: 'busy', child: Text('약간 붐빔')),
-                            DropdownMenuItem(
-                                value: 'crowded', child: Text('붐빔'))
+                                value: 'VERY_HIGH', child: Text('매우 혼잡'))
                           ],
                           onChanged: (v) {
                             setState(() {
@@ -223,17 +225,26 @@ class _HomeScreenState extends State<HomeScreen> {
                               visualDensity: VisualDensity.standard,
                               textStyle: const TextStyle(
                                   fontSize: 12, fontWeight: FontWeight.w500),
-                              side: const BorderSide(color: Color(0xFFDCE5DD)),
+                              side: const BorderSide(color: AppColors.border),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(20))),
                           onPressed: _loading ? null : _locate,
                           icon: const Icon(Icons.my_location, size: 16),
                           label: const Text('내 주변 10km'))
                     ]),
-                const SizedBox(height: 12),
-                Text(_nearby
-                    ? '현재 위치 주변 · 직선 거리순'
-                    : '관광지 목록 · 혼잡도는 관측 자료가 있는 장소에만 표시됩니다.'),
+                const SizedBox(height: 20),
+                Text(_nearby ? '내 주변 여행지' : '어디로 떠나볼까요?',
+                    style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.text)),
+                const SizedBox(height: 6),
+                Text(
+                    _nearby
+                        ? '내 위치에서 10km 이내 · 직선 거리순'
+                        : '전국 예상 혼잡도를 확인하고, 낮은 신뢰도도 함께 살펴보세요.',
+                    style: const TextStyle(
+                        fontSize: 12, height: 1.5, color: AppColors.textMuted)),
                 if (_showList) const SizedBox(height: 16),
                 if (_loading) const LinearProgressIndicator(),
                 if (_error != null)
@@ -264,7 +275,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     in _places.where((p) => _showList || p.id == _selected))
                   Container(
                       margin: const EdgeInsets.only(bottom: 12),
-                      decoration: p.id == _selected
+                      decoration: !_showList && p.id == _selected
                           ? BoxDecoration(
                               border: Border.all(
                                   color: Theme.of(context).colorScheme.primary),
@@ -302,7 +313,7 @@ class _HomeScreenState extends State<HomeScreen> {
         height: 36,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFFDCE5DD)),
+          border: Border.all(color: AppColors.border),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Center(
