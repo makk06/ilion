@@ -5,6 +5,8 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
 from places.models import CrowdData, Place, PlaceSource
+from places.integrations.tour_api import _first_text
+from places.regions import address_path, parse_region_path, region_tree
 
 
 DEFAULT_PAGE_SIZE = 20
@@ -76,6 +78,7 @@ def _visible_places():
             _has_any_source=Exists(sources),
             _has_active_source=Exists(active_sources),
             latest_crowd_id=Subquery(latest_crowd.values('id')[:1]),
+            latest_crowd_raw_data=Subquery(latest_crowd.values('raw_data')[:1]),
             latest_crowd_area_id=Subquery(
                 latest_crowd.values('crowd_area_id')[:1]
             ),
@@ -131,11 +134,15 @@ def _latest_crowd(place):
         'population_max': place.latest_crowd_population_max,
         'observed_at': place.latest_crowd_observed_at,
         'is_replaced': place.latest_crowd_is_replaced,
+        'is_demo': bool((place.latest_crowd_raw_data or {}).get('dev_seed')),
     }
 
 
 def _serialize_place(place, *, detail=False, distance_km=None):
     info = getattr(place, 'info', None)
+    intro = (info.raw_data or {}).get('intro', {}) if info else {}
+    if not isinstance(intro, dict):
+        intro = {}
     data = {
         'id': place.id,
         'name': place.name,
@@ -164,6 +171,8 @@ def _serialize_place(place, *, detail=False, distance_km=None):
                         'first_image_url': info.first_image_url or None,
                         'opening_hours': info.opening_hours or None,
                         'holiday_info': info.holiday_info or None,
+                        'admission_fee': _first_text(intro, ('usefee', 'usefeeculture', 'usefeeleports')) or None,
+                        'parking': _first_text(intro, ('parking', 'parkingculture', 'parkingleports', 'parkinglodging', 'parkingshopping', 'parkingfood')) or None,
                         'tags': info.tags,
                         'source': info.merged_summary_source or None,
                         'updated_at': info.updated_at,
@@ -210,6 +219,12 @@ def _nearby_bounding_box(latitude, longitude, radius_km):
 
 
 @require_GET
+def place_regions(request):
+    return _success({'items': region_tree(_visible_places().values_list('address', flat=True)),
+                     'coverage': 'registered_places'})
+
+
+@require_GET
 def place_list(request):
     try:
         page = _positive_int(request.GET.get('page'), name='page', default=1)
@@ -228,6 +243,7 @@ def place_list(request):
     keyword = request.GET.get('keyword', '').strip()
     category = request.GET.get('category', '').strip()
     region_code = request.GET.get('region_code', '').strip()
+    region_path = request.GET.get('region_path', '').strip()
     crowd_level = request.GET.get('crowd_level', '').strip().lower()
 
     if keyword:
@@ -238,6 +254,15 @@ def place_list(request):
         queryset = queryset.filter(category__icontains=category)
     if region_code:
         queryset = queryset.filter(region_code__startswith=region_code)
+    if region_path:
+        try:
+            selected = parse_region_path(region_path)
+        except ValueError as exc:
+            return _error(str(exc))
+        matched_ids = [pk for pk, address in queryset.values_list('pk', 'address')
+                       if address_path(address)[:len(selected)] == selected]
+        queryset = queryset.filter(pk__in=matched_ids)
+        region_path = '/'.join(selected)
     try:
         crowd_level = _validate_crowd_level(crowd_level)
     except ValueError as exc:
@@ -264,6 +289,7 @@ def place_list(request):
                 'keyword': keyword,
                 'category': category,
                 'region_code': region_code,
+                'region_path': region_path,
                 'crowd_level': crowd_level,
             },
         }

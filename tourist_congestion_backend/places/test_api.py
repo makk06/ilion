@@ -372,6 +372,20 @@ class PlaceAPITests(TestCase):
         )
 
 
+    def test_detail_exposes_normalized_fee_parking_and_missing_values(self):
+        info = PlaceInfo.objects.get(place=self.gyeongbokgung)
+        info.raw_data = {'intro': {'usefeeculture': '<b>성인 3,000원</b><br>청소년 무료', 'parkingculture': '주차장 &amp; 장애인 주차', 'usetimefestival': '09:00–18:00'}}
+        info.save()
+        data = self.client.get(reverse('place-detail', args=[self.gyeongbokgung.id])).json()['data']['info']
+        self.assertEqual(data['admission_fee'], '성인 3,000원\n청소년 무료')
+        self.assertEqual(data['parking'], '주차장 & 장애인 주차')
+        info.raw_data = {'intro': {'usetimefestival': '09:00–18:00'}}
+        info.save()
+        data = self.client.get(reverse('place-detail', args=[self.gyeongbokgung.id])).json()['data']['info']
+        self.assertIsNone(data['admission_fee'])
+        self.assertIsNone(data['parking'])
+
+
 class SeededPlaceAPITests(TestCase):
     @override_settings(DEBUG=True)
     def test_seed_data_is_immediately_available_through_api(self):

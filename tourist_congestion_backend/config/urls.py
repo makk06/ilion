@@ -16,14 +16,20 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import include, path
+from django.conf import settings
+from django.conf.urls.static import static
 
 from config.views import healthz
+from config.map_tiles import vworld_tile
 from places.demo_views import place_demo
 
 urlpatterns = [
+    path('api/maps/vworld/<int:z>/<int:x>/<int:y>.png', vworld_tile),
     path('healthz', healthz, name='healthz'),
     path('demo/', place_demo, name='place-demo'),
     path('api/', include('places.urls')),
     path('admin/', admin.site.urls),
     path('api/', include('users.urls')),
 ]
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
