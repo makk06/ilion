@@ -1,0 +1,260 @@
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "place": {
+          "id": 416,
+          "name": "대한민국역사박물관",
+          "category": "문화시설",
+          "address": "서울특별시 종로구 세종대로 198 (세종로)",
+          "latitude": 37.57408,
+          "longitude": 126.97756,
+          "indoor_outdoor": "indoor",
+          "indoor_outdoor_source": "reviewed_name_rule_v5",
+          "indoor_outdoor_evidence_quality": "inferred_from_name",
+          "indoor_outdoor_evidence": "name:박물관",
+          "weather_exposure": {
+            "level": "low",
+            "activity": "장소명에서 추정한 방문 공간",
+            "source": "name_rule",
+            "reason": "장소명에서 추정한 방문 공간을(를) 주된 방문 활동으로 보아 날씨 노출을 low로 추정했습니다.",
+            "conflict": false,
+            "conflict_reason": null,
+            "type_code": "VE070100",
+            "type_name": "박물관",
+            "weight_factor": 0.5,
+            "policy_version": "weather_exposure_v1",
+            "persisted": false
+          }
+        },
+        "distance_km": 0.114,
+        "distance_type": "straight_line",
+        "travel_time_minutes": null,
+        "crowd": null,
+        "weather_status": "complete",
+        "weather": {
+          "source": "kma_vilage",
+          "issued_at": "2026-09-14T14:00:00Z",
+          "target_at": "2026-09-14T16:00:00Z",
+          "precipitation_type": 0,
+          "temperature_c": 18.0,
+          "wind_mps": 0.4,
+          "completeness": "complete"
+        },
+        "recommendation_score": 93.77,
+        "distance_adjustment": {
+          "factor": 1.0,
+          "base_score": 93.77
+        },
+        "score_breakdown": {
+          "distance": 95.65,
+          "category": 90,
+          "crowd": null,
+          "weather": 65,
+          "indoor_outdoor": null
+        },
+        "score_effective_breakdown": {
+          "distance": 95.65,
+          "category": 90,
+          "crowd": null,
+          "weather": 57.5,
+          "indoor_outdoor": null
+        },
+        "score_contributors": [
+          "distance",
+          "category"
+        ],
+        "data_coverage": 0.57,
+        "ranking_coverage": 1.0,
+        "missing_data": [
+          "crowd",
+          "indoor_outdoor"
+        ],
+        "reasons": [
+          "현재 위치에서 직선거리 0.1km입니다.",
+          "문화시설로 등록된 장소입니다."
+        ],
+        "rank": 1
+      },
+      {
+        "place": {
+          "id": 1033,
+          "name": "바라캇 서울",
+          "category": "문화시설",
+          "address": "서울특별시 종로구 삼청로 58-4",
+          "latitude": 37.580862,
+          "longitude": 126.980651,
+          "indoor_outdoor": "unknown",
+          "indoor_outdoor_source": null,
+          "indoor_outdoor_evidence_quality": "unknown",
+          "indoor_outdoor_evidence": null,
+          "weather_exposure": {
+            "level": "low",
+            "activity": "미술관·화랑 관람",
+            "source": "type_prior",
+            "reason": "한국관광공사 유형 「미술관/화랑」을 바탕으로 한 약한 날씨 노출 추정입니다. 이 유형만으로 개별 장소의 실제 이용방식을 확인할 수 없습니다.",
+            "conflict": false,
+            "conflict_reason": null,
+            "type_code": "VE070600",
+            "type_name": "미술관/화랑",
+            "weight_factor": 0.35,
+            "policy_version": "weather_exposure_v1",
+            "persisted": false
+          }
+        },
+        "distance_km": 0.727,
+        "distance_type": "straight_line",
+        "travel_time_minutes": null,
+        "crowd": null,
+        "weather_status": "complete",
+        "weather": {
+          "source": "kma_vilage",
+          "issued_at": "2026-09-14T14:00:00Z",
+          "target_at": "2026-09-14T16:00:00Z",
+          "precipitation_type": 0,
+          "temperature_c": 18.0,
+          "wind_mps": 0.4,
+          "completeness": "complete"
+        },
+        "recommendation_score": 81.65,
+        "distance_adjustment": {
+          "factor": 1.0,
+          "base_score": 81.65
+        },
+        "score_breakdown": {
+          "distance": 77.47,
+          "category": 90,
+          "crowd": null,
+          "weather": 65,
+          "indoor_outdoor": null
+        },
+        "score_effective_breakdown": {
+          "distance": 77.47,
+          "category": 90,
+          "crowd": null,
+          "weather": 55.25,
+          "indoor_outdoor": null
+        },
+        "score_contributors": [
+          "distance",
+          "category"
+        ],
+        "data_coverage": 0.54,
+        "ranking_coverage": 1.0,
+        "missing_data": [
+          "crowd",
+          "indoor_outdoor"
+        ],
+        "reasons": [
+          "현재 위치에서 직선거리 0.7km입니다.",
+          "문화시설로 등록된 장소입니다."
+        ],
+        "rank": 2
+      },
+      {
+        "place": {
+          "id": 305,
+          "name": "갤러리 라메르",
+          "category": "문화시설",
+          "address": "서울특별시 종로구 인사동5길 26 (관훈동)",
+          "latitude": 37.572582,
+          "longitude": 126.984868,
+          "indoor_outdoor": "unknown",
+          "indoor_outdoor_source": null,
+          "indoor_outdoor_evidence_quality": "unknown",
+          "indoor_outdoor_evidence": null,
+          "weather_exposure": {
+            "level": "low",
+            "activity": "미술관·화랑 관람",
+            "source": "type_prior",
+            "reason": "한국관광공사 유형 「미술관/화랑」을 바탕으로 한 약한 날씨 노출 추정입니다. 이 유형만으로 개별 장소의 실제 이용방식을 확인할 수 없습니다.",
+            "conflict": false,
+            "conflict_reason": null,
+            "type_code": "VE070600",
+            "type_name": "미술관/화랑",
+            "weight_factor": 0.35,
+            "policy_version": "weather_exposure_v1",
+            "persisted": false
+          }
+        },
+        "distance_km": 0.744,
+        "distance_type": "straight_line",
+        "travel_time_minutes": null,
+        "crowd": null,
+        "weather_status": "complete",
+        "weather": {
+          "source": "kma_vilage",
+          "issued_at": "2026-09-14T14:00:00Z",
+          "target_at": "2026-09-14T16:00:00Z",
+          "precipitation_type": 0,
+          "temperature_c": 18.0,
+          "wind_mps": 0.4,
+          "completeness": "complete"
+        },
+        "recommendation_score": 81.38,
+        "distance_adjustment": {
+          "factor": 1.0,
+          "base_score": 81.38
+        },
+        "score_breakdown": {
+          "distance": 77.07,
+          "category": 90,
+          "crowd": null,
+          "weather": 65,
+          "indoor_outdoor": null
+        },
+        "score_effective_breakdown": {
+          "distance": 77.07,
+          "category": 90,
+          "crowd": null,
+          "weather": 55.25,
+          "indoor_outdoor": null
+        },
+        "score_contributors": [
+          "distance",
+          "category"
+        ],
+        "data_coverage": 0.54,
+        "ranking_coverage": 1.0,
+        "missing_data": [
+          "crowd",
+          "indoor_outdoor"
+        ],
+        "reasons": [
+          "현재 위치에서 직선거리 0.7km입니다.",
+          "문화시설로 등록된 장소입니다."
+        ],
+        "rank": 3
+      }
+    ],
+    "generated_at": "2026-09-14T16:20:56.991965Z",
+    "visit_at": "2026-09-14T16:20:56.991965Z",
+    "algorithm_version": "mvp-7",
+    "candidate_count": 14,
+    "ranking_basis": "travel_discovery",
+    "ranking_factors": [
+      "distance",
+      "category"
+    ],
+    "preference_source": "default_travel_intent",
+    "weather_aware": false,
+    "weather_evidence_required": false,
+    "ranking_policy": {
+      "missing_evidence_baseline": 50,
+      "meaning": "ranking neutral point, not an observed value",
+      "weights": {
+        "distance": 0.3,
+        "category": 0.15
+      },
+      "distance_scale_km": 2.5,
+      "distance_guard_free_km": 5.0,
+      "distance_guard_scale_km": 20.0,
+      "name_rule_weight_factor": 0.5,
+      "description_rule_weight_factor": 0.75,
+      "luna_validated_weight_factor": 0.5,
+      "type_prior_weather_weight_factor": 0.35
+    }
+  },
+  "message": ""
+}

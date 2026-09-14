@@ -1,13 +1,13 @@
-"""Read-only, DEBUG-only view for assessing the local backend snapshot."""
+"""Read-only recommendation preview; operational diagnostics are DEBUG-only."""
 
 import os
 from time import perf_counter
 
 from django.conf import settings
 from django.db.models import Count, Max, OuterRef, Subquery
-from django.http import Http404
 from django.shortcuts import render
 from django.utils import timezone
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 
 from places.models import (
@@ -255,12 +255,23 @@ def _preview(request, form, now):
     return None, experiment, None
 
 
-def _snapshot(now):
+def _snapshot(now, *, include_operations=True):
     total_places = Place.objects.count()
     detail_count = PlaceInfo.objects.exclude(description='').exclude(
         description__contains='개발용 상세정보').count()
     classified_count = Place.objects.exclude(indoor_outdoor=Place.IndoorOutdoor.UNKNOWN).count()
     weather_grids = WeatherForecast.objects.values('grid_x', 'grid_y').distinct().count()
+    catalog = {
+        'total_places': total_places,
+        'detail_count': detail_count,
+        'detail_percent': 100 * detail_count / total_places if total_places else 0,
+        'classified_count': classified_count,
+        'classified_percent': 100 * classified_count / total_places if total_places else 0,
+        'weather_grids': weather_grids,
+        'mapped_places': PlaceCrowdArea.objects.values('place_id').distinct().count(),
+    }
+    if not include_operations:
+        return catalog
     weather_latest = WeatherForecast.objects.aggregate(issued=Max('issued_at'), fetched=Max('fetched_at'))
     latest_observation = CrowdData.objects.filter(crowd_area_id=OuterRef('pk')).order_by('-observed_at', '-id')
     areas = list(CrowdArea.objects.annotate(
@@ -317,31 +328,37 @@ def _snapshot(now):
             ),
         })
     return {
-        'total_places': total_places,
-        'detail_count': detail_count,
-        'detail_percent': 100 * detail_count / total_places if total_places else 0,
-        'classified_count': classified_count,
-        'classified_percent': 100 * classified_count / total_places if total_places else 0,
-        'weather_grids': weather_grids,
+        **catalog,
         'weather_latest': weather_latest,
         'crowd_areas': areas,
         'crowd_fresh': crowd_fresh,
         'crowd_valid': crowd_valid,
         'crowd_delayed': crowd_delayed,
-        'mapped_places': PlaceCrowdArea.objects.values('place_id').distinct().count(),
         'job_counts': job_counts,
         'recent_jobs': DataJob.objects.order_by('-created_at', '-id')[:8],
         'budgets': budgets,
     }
 
 
+@never_cache
 @require_http_methods(['GET', 'POST'])
 def backend_test_dashboard(request):
-    if not settings.DEBUG:
-        raise Http404('Temporary dashboard is available only with DEBUG=true')
     now = timezone.now()
     form = _form_values(request)
     preview, experiment, form_errors = _preview(request, form, now)
+    context = {
+        'now': now,
+        'form': form,
+        'form_errors': form_errors,
+        'preview': preview,
+        'experiment': experiment,
+        'city_presets': CITY_PRESETS,
+        'categories': CATEGORIES,
+        'show_operations': settings.DEBUG,
+        'snapshot': _snapshot(now, include_operations=settings.DEBUG),
+    }
+    if not settings.DEBUG:
+        return render(request, 'config/backend_test_dashboard.html', context)
     recent_cases = list(PlaceClassificationEvidence.objects.filter(
         method__in=('description_rule', 'luna_validated')).select_related(
         'place', 'place__info').order_by(
@@ -379,14 +396,7 @@ def backend_test_dashboard(request):
             'indoor_label': INDOOR_LABELS[place.indoor_outdoor],
         })
     return render(request, 'config/backend_test_dashboard.html', {
-        'now': now,
-        'form': form,
-        'form_errors': form_errors,
-        'preview': preview,
-        'experiment': experiment,
-        'city_presets': CITY_PRESETS,
-        'categories': CATEGORIES,
-        'snapshot': _snapshot(now),
+        **context,
         'classification_cases': classification_cases,
         'weather_profile_cases': weather_profile_cases,
         'luna_attempt_count': PlaceClassificationAttempt.objects.count(),

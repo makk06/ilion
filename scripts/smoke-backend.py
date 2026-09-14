@@ -43,7 +43,7 @@ def main():
         second = docker('exec', container, 'python', 'manage.py', 'run_data_worker', '--once', check=False)
         assert second.returncode != 0 and 'already running' in second.stderr
         docker('exec', '-e', 'DJANGO_DEBUG=true', container, 'python', 'manage.py', 'seed_dev_data')
-        probe = '''import json,urllib.request
+        probe = '''import json,re,urllib.parse,urllib.request
 request=urllib.request.Request('http://127.0.0.1:8000/api/recommendations',
  data=json.dumps({'latitude':37.575,'longitude':126.977,'limit':3,'weather_aware':False}).encode(),
  headers={'Content-Type':'application/json','X-Forwarded-Proto':'https'})
@@ -51,6 +51,26 @@ with urllib.request.urlopen(request,timeout=10) as response:
  body=json.load(response)
  assert body['success'] and len(body['data']['items'])>0,body
 print('Recommendation API returned real fixture candidates')
+url='http://127.0.0.1:8000/test/backend/'
+headers={'X-Forwarded-Proto':'https','Host':'ilion.example.test'}
+with urllib.request.urlopen(urllib.request.Request(url,headers=headers),timeout=15) as response:
+ html=response.read().decode()
+ assert '이리온 추천 MVP 시안 · 개발 중' in html
+ assert '백엔드 작업 현황' not in html
+ assert 'no-store' in response.headers['Cache-Control']
+ cookie=response.headers['Set-Cookie'].split(';',1)[0]
+ token=re.search('name="csrfmiddlewaretoken" value="([^"]+)"',html).group(1)
+headers.update({'Cookie':cookie,'Origin':'https://ilion.example.test'})
+request=urllib.request.Request(url,headers=headers,data=urllib.parse.urlencode({
+ 'csrfmiddlewaretoken':token,'scenario':'weather','latitude':'37.575',
+ 'longitude':'126.977','radius_km':'3','limit':'3','crowd_level':'any',
+ 'weather_aware':'on'}).encode())
+with urllib.request.urlopen(request,timeout=15) as response:
+ html=response.read().decode()
+ assert '가상 날씨 실험 · 실제 예보가 아닙니다' in html
+ assert '입력값을 확인해 주세요' not in html
+ assert '백엔드 작업 현황' not in html
+print('Production preview GET and CSRF-protected virtual-weather POST passed')
 '''
         print(docker('exec', container, 'python', '-c', probe).stdout.strip(), flush=True)
         with sqlite3.connect(directory/'db.sqlite3') as db:

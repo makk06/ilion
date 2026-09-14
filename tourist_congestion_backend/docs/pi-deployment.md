@@ -8,7 +8,7 @@
 - 배포용 `deploy`: `https://github.com/hurdoo/ilion.git`.
 - 배포 소스는 `feature/be-recommendation-core`의 검증된 커밋이다. 원본/포크의 main을 자동으로 병합하지 않는다.
 - 이미지 저장소: `ghcr.io/hurdoo/ilion`, ARM64, 커밋 태그와 immutable digest 사용.
-- 앱 ID: `ilion`, URL: `https://ilion.app.hurdoo.kr`, 최초 접근은 LAN/WireGuard 전용.
+- 앱 ID: `ilion`, URL: `https://ilion.app.hurdoo.kr`, 접근 범위는 사용자 설정에 맞춘 `public`.
 - 소스의 `deploy.json`은 빌드 계약이다. 대시보드에 붙여넣는 것은 `deployctl publish`가 출력한 **release/digest 포함 JSON**이다.
 
 GHCR 패키지가 없으면 `.github/workflows/bootstrap-ilion-image.yml`을 먼저 기본 브랜치에 반영하고 사용자가 검토한 전체 커밋 SHA로 수동 실행한다. 이 워크플로는 해당 커밋의 테스트를 통과한 후 저장소에 연결된 패키지를 만든다. 원본 main에 있는 다른 앱 코드나 테스트를 대신 배포하지 않는다. 최초 패키지 생성은 별도 승인 후 실행한다. 패키지 공개 범위와 Pi pull 권한도 확인해야 한다.
@@ -60,6 +60,10 @@ HTTPS 전달 헤더, 보안 쿠키와 정확한 앱 호스트의 HSTS를 사용�
 한도 소진 시 다음 한국 날짜까지 미룬다. 목록은 페이지 cursor를 유지하며 끝까지 받지 못하고 페이지 제한에 걸리면 `PageLimitExceeded`로 실패 처리한다. 다음 예약은 마지막 성공 기준을 유지한다. 15분 지난 미실행 혼잡 작업과 5시간 지난 예보 작업은 `ExpiredWindow`로 끝내 오래된 큐가 다음 날 예산을 소모하지 않게 한다. 인증 오류는 실패로 기록하며 같은 작업을 무한 재시도하지 않는다.
 
 **같은 키의 실수집은 Pi로 일원화한다.** 개발 머신에서 `run_data_worker --dev`, 실제 키로 직접 `sync_tour_*`/`sync_seoul_*` 명령을 함께 실행하지 않는다. 기존 직접 수집 명령은 공통 큐 예산을 거치지 않는다. 테스트는 `PYTHON_DOTENV_DISABLED=1`, 모의 응답/개발 시드를 쓴다. 외부 포털에서 같은 키를 수동 호출한 사용량은 앱 카운터에 자동 합산되지 않는다.
+
+## 공개 추천 시안
+
+`https://ilion.app.hurdoo.kr/test/backend/`는 공개 시안 릴리스부터 운영 `DEBUG=false`에서도 열린다. 기본 추천과 가상 날씨·선호·필수 조건·거리순 비교를 제공한다. 저장된 자료만 읽으며 외부 API 호출이나 보충 작업 등록을 하지 않는다. 가상 날씨는 요청 메모리 안에서만 사용한다. POST는 기존 CSRF 검증을 유지하고 응답은 캐시하지 않는다. 수집 작업·호출 예산·개발용 고정 사례는 DEBUG 환경에만 표시한다. 화면을 열기 위해 운영 DEBUG를 켜지 않는다.
 
 ## 상태와 복구
 

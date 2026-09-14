@@ -6,7 +6,7 @@
   "description": "개발 중인 추천 알고리즘 MVP · 운영 단일 수집 워커",
   "containerPort": 8000,
   "healthPath": "/healthz",
-  "access": "private",
+  "access": "public",
   "dataEnabled": true,
   "resources": {"memoryMiB": 1024, "cpus": 1, "pids": 128},
   "ingressProfile": "standard",

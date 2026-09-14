@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>추천 백엔드 테스트베드 · 이리온</title>
+  <title>추천 MVP 시안 · 이리온</title>
   <style>
     :root { color-scheme: light; --ink:#17252d; --muted:#617179; --line:#dbe4e4; --sea:#0b6664; --pale:#e9f4f0; --paper:#fffdfa; --bg:#f2f5f3; --warn:#a26016; --bad:#b33e36; }
     * { box-sizing:border-box; }
@@ -135,7 +135,7 @@
   <main class="wrap">
     <header class="hero">
       <div>
-        <span class="test-ribbon">● 이리온 백엔드 테스트베드 · 운영 화면 아님</span>
+        <span class="test-ribbon">{% if show_operations %}● 이리온 백엔드 테스트베드 · 운영 화면 아님{% else %}● 이리온 추천 MVP 시안 · 개발 중{% endif %}</span>
         <h1>추천이 달라지는 이유를 직접 눌러 보세요</h1>
         <p>실제 저장된 전국 장소로 추천을 살펴보고, 날씨·취향·필수 조건·거리순을 같은 위치에서 비교합니다. 이 화면은 읽기 전용이며 외부 API를 호출하거나 수집 작업을 만들지 않습니다.</p>
       </div>
@@ -197,9 +197,9 @@
         {% if preview %}
         <section class="panel results" aria-live="polite" aria-labelledby="result-title">
           <h2 id="result-title">추천 결과</h2>
-          <div class="result-summary"><strong>{{ preview.items|length }}개 반환</strong><span class="subtle">조건에 맞는 후보 {{ preview.candidate_count }}개 · 이 PC에서 단일 계산 {{ preview.elapsed_ms }}ms · 방문 {{ preview.visit_at|date:"m.d H:i" }}</span></div>
+          <div class="result-summary"><strong>{{ preview.items|length }}개 반환</strong><span class="subtle">조건에 맞는 후보 {{ preview.candidate_count }}개 · 서버 단일 계산 {{ preview.elapsed_ms }}ms · 방문 {{ preview.visit_at|date:"m.d H:i" }}</span></div>
           <div class="summary-chips"><span class="chip">날씨 점수 근거 {{ preview.weather_count }}개</span><span class="chip neutral">혼잡 관측 {{ preview.crowd_count }}개</span><span class="chip neutral">상세 설명 {{ preview.detail_count }}개</span></div>
-          <div class="note">상위 결과의 근거 보유 수입니다. 이 시간은 로컬 단일 요청 측정으로 운영 속도나 추천 만족도를 뜻하지 않습니다. 결측 항목은 관측값이 아닌 중립 순위 기준을 적용합니다.</div>
+          <div class="note">상위 결과의 근거 보유 수입니다. 계산 시간에는 네트워크 전송·화면 표시가 포함되지 않으며 서비스 응답 속도나 추천 만족도를 보증하지 않습니다. 결측 항목은 관측값이 아닌 중립 순위 기준을 적용합니다.</div>
           {% if preview.message %}<div class="note">{{ preview.message }}</div>{% endif %}
           {% include 'config/recommendation_cards.html' with preview=preview compact=False %}
           <div class="fine">추천 엔진 {{ preview.algorithm_version }} · 순위 기준 {{ preview.ranking_basis }} · 이 페이지는 API 결과를 검토하기 위한 임시 시안입니다.</div>
@@ -231,6 +231,7 @@
         {% endif %}
       </div>
 
+      {% if show_operations %}
       <details class="snapshot-details" style="margin-top:18px">
         <summary>주활동 날씨 노출 사례 {{ weather_profile_cases|length }}건 펼치기 · 공식 유형은 약한 추정</summary>
         <p class="subtle">실내외 분류와 날씨 노출은 다른 판단입니다. 예를 들어 경복궁은 실내외 분류가 미확인이어도 공식 고궁 유형으로 날씨 영향을 약하게 반영합니다. 이 유형 추정은 개별 장소의 실측·수동 확인이 아니며 ‘실내 필수’ 근거로 쓸 수 없습니다.</p>
@@ -259,8 +260,9 @@
           <div class="table-wrap"><table><thead><tr><th>공급자</th><th>기록 사용</th><th>설정 상한</th></tr></thead><tbody>{% for budget in snapshot.budgets %}<tr><td>{{ budget.name }}</td><td>{{ budget.used }}회<div class="subtle">정기 {{ budget.regular }} · 보충 {{ budget.supplemental }} · 예비 {{ budget.reserve }}</div></td><td>{{ budget.limit }}</td></tr>{% endfor %}</tbody></table></div>
         </section>
       </div></details></aside>
+      {% endif %}
     </div>
-    <footer class="footer">이리온 백엔드 임시 테스트베드 · 로컬 개발 환경(DEBUG=true)에서만 열립니다. 외부 API 호출·DB 갱신·서비스 품질 보증 기능은 포함하지 않습니다.</footer>
+    <footer class="footer">이리온 추천 알고리즘 MVP · 개발 중인 읽기 전용 시안입니다. 실제 추천은 저장된 자료를 사용하고 가상 날씨는 화면 비교에만 적용됩니다. 외부 API 호출·DB 갱신·서비스 품질 보증 기능은 포함하지 않습니다.</footer>
   </main>
   <script>
     for (const button of document.querySelectorAll('.preset')) {

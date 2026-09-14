@@ -1,5 +1,7 @@
 # 장소·혼잡도 API
 
+현재 운영 서버 연동과 `mvp-7` 추천의 전체 사용법은 [프론트엔드 전달 가이드](./FRONTEND_HANDOFF.md)를 먼저 확인합니다. 이 문서 아래의 직접 수집 명령은 백엔드 수동 점검용이며, 프론트 연동을 위해 실행하지 않습니다. 실제 수집은 Pi 운영 워커로 일원화합니다.
+
 전국 최대 10개 추천의 입력·출력과 날씨 최신성은 [추천 MVP 계약](./docs/recommendation-mvp.md)을 참고합니다.
 현재 추천 버전 `mvp-7`의 날씨 노출 필드는 [날씨 노출 구현·고정 평가](./docs/weather-exposure-mvp7-2026-09-14.md)를 우선합니다. `place.weather_exposure`의 `high/medium/low/unknown`은 주활동에 대한 정책상 서열형 추정이며 실측 비율이 아닙니다. `indoor_outdoor` 호환 라벨과 별도입니다. 공식 TourAPI 유형만으로 날씨 점수에 약하게 기여할 수 있으나 실내 필수·날씨 근거 필수 조건의 확인 근거는 아닙니다. `source`, `reason`, `conflict`, `weight_factor`, `type_code`, `persisted`를 함께 표시해야 합니다.
 추천의 실내외 라벨은 원시 `indoor_outdoor`만으로 확정하지 않습니다. `place.indoor_outdoor_evidence_quality`가 `inferred_from_description`이면 공개 설명의 주활동·장소 범위 규칙 추정, `inferred_from_luna`이면 AI 추정이고, `stale_auto_evidence`이면 현재 입력과 맞지 않는 자동 근거입니다. 엄격한 `required_indoor_outdoor`는 수동 또는 명확한 설명 규칙만 허용하고 AI 추정은 제외합니다. [현재 분류 운영·평가 계약](./docs/place-classification-context-evaluation-2026-09-14.md)을 참고합니다.
