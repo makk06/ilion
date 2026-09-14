@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 from html import unescape
 from urllib.parse import unquote, urlparse
 
-from .exceptions import ExternalAPIConfigurationError, ExternalAPIError
+from .exceptions import ExternalAPIAuthError, ExternalAPIConfigurationError, ExternalAPIError, ExternalAPIQuotaError
 from .http import (
     DEFAULT_TIMEOUT_SECONDS,
     build_retrying_session,
@@ -191,6 +191,10 @@ def _response_items(payload):
     header = response.get('header') or {}
     result_code = str(header.get('resultCode', ''))
     if result_code != '0000':
+        if result_code in {'20', '30', '31', '32'}:
+            raise ExternalAPIAuthError(f'TourAPI rejected credentials (code {result_code})')
+        if result_code in {'22'}:
+            raise ExternalAPIQuotaError('TourAPI call quota exceeded')
         message = str(header.get('resultMsg') or 'unknown error')
         raise ExternalAPIError(f'TourAPI error {result_code}: {message}')
 
@@ -289,7 +293,7 @@ class TourAPIClient:
             timeout=self.timeout,
             provider='TourAPI',
         )
-        return self._parse_page(payload)
+        return self._parse_page(payload, requested_page_size=page_size)
 
     def fetch_place_detail(self, content_id, content_type_id, *, include_intro=True):
         common_params = {
@@ -329,7 +333,7 @@ class TourAPIClient:
         return normalize_tour_place_detail(common_item, intro_item)
 
     @staticmethod
-    def _parse_page(payload):
+    def _parse_page(payload, *, requested_page_size=None):
         body, items = _response_items(payload)
 
         records = [
@@ -340,6 +344,8 @@ class TourAPIClient:
         return TourAPIPage(
             records=records,
             page_number=_integer(body.get('pageNo'), 1),
-            page_size=_integer(body.get('numOfRows'), max(len(records), 1)),
+            # The provider reports the number actually returned on short pages.
+            # Pagination must use the requested size to avoid an extra empty call.
+            page_size=requested_page_size or _integer(body.get('numOfRows'), max(len(records), 1)),
             total_count=_integer(body.get('totalCount'), len(records)),
         )

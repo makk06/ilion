@@ -18,12 +18,16 @@ from django.contrib import admin
 from django.urls import include, path
 
 from config.views import healthz
+from config.test_dashboard import backend_test_dashboard
 from places.demo_views import place_demo
+from recommendations.views import RecommendationView
 
 urlpatterns = [
     path('healthz', healthz, name='healthz'),
+    path('test/backend/', backend_test_dashboard, name='backend-test-dashboard'),
     path('demo/', place_demo, name='place-demo'),
     path('api/', include('places.urls')),
+    path('api/recommendations', RecommendationView.as_view(), name='recommendations'),
     path('admin/', admin.site.urls),
     path('api/', include('users.urls')),
 ]

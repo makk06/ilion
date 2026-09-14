@@ -19,8 +19,12 @@ from places.models import (
     PlaceCrowdArea,
     PlaceInfo,
     PlaceSource,
+    WeatherForecast,
 )
 from places.services import TourPlaceSyncService
+from places.services.classification import classify_place
+from places.services.weather import grid_for, latest_available_issue
+from datetime import timedelta
 
 
 class StaticTourClient:
@@ -98,7 +102,7 @@ class Command(BaseCommand):
             existing_info = PlaceInfo.objects.filter(place=source.place).first()
             if existing_info and not existing_info.raw_data.get('dev_seed'):
                 continue
-            PlaceInfo.objects.update_or_create(
+            info, _ = PlaceInfo.objects.update_or_create(
                 place=source.place,
                 defaults={
                     'description': item['description'],
@@ -108,6 +112,7 @@ class Command(BaseCommand):
                     'raw_data': {'dev_seed': True},
                 },
             )
+            classify_place(source.place, info)
 
         now = timezone.now()
         seeded_areas = []
@@ -172,6 +177,28 @@ class Command(BaseCommand):
             crowd_area__in=seeded_areas,
         ).distinct().count()
 
+        issue = latest_available_issue(now)
+        target = now.replace(minute=0, second=0, microsecond=0)
+        for source in PlaceSource.objects.filter(raw_data__dev_seed=True, place__isnull=False).select_related('place'):
+            grid = grid_for(source.place.latitude, source.place.longitude)
+            if not grid:
+                continue
+            for offset in range(4):
+                forecast_target = target + timedelta(hours=offset)
+                if WeatherForecast.objects.filter(grid_x=grid[0], grid_y=grid[1],
+                        target_at=forecast_target).exclude(raw_data__dev_seed=True).exists():
+                    continue
+                if WeatherForecast.objects.filter(grid_x=grid[0], grid_y=grid[1],
+                        issued_at=issue, target_at=forecast_target).exists():
+                    continue
+                WeatherForecast.objects.create(
+                    grid_x=grid[0], grid_y=grid[1], issued_at=issue,
+                    target_at=forecast_target,
+                    precipitation_type=1 if source.place.region_code.startswith('11') else 0,
+                    temperature_c=20, wind_mps=3,
+                    raw_data={'dev_seed': True},
+                )
+
         return {
             'places': Place.objects.filter(sources__raw_data__dev_seed=True)
             .distinct()
@@ -204,6 +231,7 @@ class Command(BaseCommand):
         observations_deleted, _ = CrowdData.objects.filter(
             raw_data__dev_seed=True
         ).delete()
+        WeatherForecast.objects.filter(raw_data__dev_seed=True).delete()
         sources_deleted, _ = seed_sources.delete()
         places_deleted, _ = Place.objects.filter(
             id__in=place_ids,

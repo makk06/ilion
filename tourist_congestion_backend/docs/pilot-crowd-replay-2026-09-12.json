@@ -1,0 +1,148 @@
+{
+  "measured_at": "2026-09-12T07:34:22.321294+00:00",
+  "evaluated_at": "2026-09-12T07:29:24+00:00",
+  "cohort": {
+    "selected": 360,
+    "detail": 183,
+    "description": 183,
+    "image": 163,
+    "classified": 40
+  },
+  "cohort_by_city": {
+    "seoul": {
+      "selected": 120,
+      "detail": 63,
+      "description": 63,
+      "image": 55,
+      "classified": 13
+    },
+    "busan": {
+      "selected": 120,
+      "detail": 60,
+      "description": 60,
+      "image": 50,
+      "classified": 13
+    },
+    "jeju": {
+      "selected": 120,
+      "detail": 60,
+      "description": 60,
+      "image": 58,
+      "classified": 14
+    }
+  },
+  "default_recommendations": {
+    "seoul": {
+      "candidate_count": 5122,
+      "returned": 10,
+      "weather_evidence": 3,
+      "indoor_outdoor_evidence": 3,
+      "crowd_evidence": 1,
+      "cohort_exposure": 10,
+      "category_count": 4,
+      "mean_data_coverage": 0.395,
+      "elapsed_ms": 141.3,
+      "weather_required": {
+        "candidate_count": 160,
+        "returned": 10,
+        "shortage": false
+      }
+    },
+    "busan": {
+      "candidate_count": 1086,
+      "returned": 10,
+      "weather_evidence": 2,
+      "indoor_outdoor_evidence": 2,
+      "crowd_evidence": 0,
+      "cohort_exposure": 10,
+      "category_count": 3,
+      "mean_data_coverage": 0.35,
+      "elapsed_ms": 41.5,
+      "weather_required": {
+        "candidate_count": 33,
+        "returned": 10,
+        "shortage": false
+      }
+    },
+    "jeju": {
+      "candidate_count": 574,
+      "returned": 10,
+      "weather_evidence": 0,
+      "indoor_outdoor_evidence": 0,
+      "crowd_evidence": 0,
+      "cohort_exposure": 9,
+      "category_count": 2,
+      "mean_data_coverage": 0.3,
+      "elapsed_ms": 28.6,
+      "weather_required": {
+        "candidate_count": 14,
+        "returned": 10,
+        "shortage": false
+      }
+    },
+    "daejeon": {
+      "candidate_count": 754,
+      "returned": 10,
+      "weather_evidence": 1,
+      "indoor_outdoor_evidence": 1,
+      "crowd_evidence": 0,
+      "cohort_exposure": 0,
+      "category_count": 3,
+      "mean_data_coverage": 0.325,
+      "elapsed_ms": 31.7,
+      "weather_required": {
+        "candidate_count": 35,
+        "returned": 10,
+        "shortage": false
+      }
+    },
+    "daegu": {
+      "candidate_count": 836,
+      "returned": 10,
+      "weather_evidence": 1,
+      "indoor_outdoor_evidence": 1,
+      "crowd_evidence": 0,
+      "cohort_exposure": 0,
+      "category_count": 2,
+      "mean_data_coverage": 0.325,
+      "elapsed_ms": 35.1,
+      "weather_required": {
+        "candidate_count": 27,
+        "returned": 10,
+        "shortage": false
+      }
+    },
+    "gwangju": {
+      "candidate_count": 513,
+      "returned": 10,
+      "weather_evidence": 0,
+      "indoor_outdoor_evidence": 0,
+      "crowd_evidence": 0,
+      "cohort_exposure": 0,
+      "category_count": 3,
+      "mean_data_coverage": 0.3,
+      "elapsed_ms": 27.4,
+      "weather_required": {
+        "candidate_count": 20,
+        "returned": 10,
+        "shortage": false
+      }
+    },
+    "gangneung": {
+      "candidate_count": 617,
+      "returned": 10,
+      "weather_evidence": 1,
+      "indoor_outdoor_evidence": 1,
+      "crowd_evidence": 0,
+      "cohort_exposure": 0,
+      "category_count": 4,
+      "mean_data_coverage": 0.325,
+      "elapsed_ms": 26.8,
+      "weather_required": {
+        "candidate_count": 22,
+        "returned": 10,
+        "shortage": false
+      }
+    }
+  }
+}

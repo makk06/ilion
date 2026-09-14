@@ -168,6 +168,26 @@ class PlaceAPITests(TestCase):
             0,
         )
 
+    def test_delayed_crowd_remains_filterable_until_45_minutes(self):
+        CrowdData.objects.exclude(pk=self.latest_observation.pk).delete()
+        self.latest_observation.observed_at = timezone.now() - timedelta(minutes=35)
+        self.latest_observation.save(update_fields=['observed_at'])
+
+        delayed = self.client.get(reverse('place-list'), {'crowd_level': 'busy'})
+        self.assertEqual(delayed.json()['data']['pagination']['total'], 1)
+        crowd = delayed.json()['data']['items'][0]['latest_crowd']
+        self.assertTrue(crowd['is_delayed'])
+        self.assertFalse(crowd['is_expired'])
+
+        self.latest_observation.observed_at = timezone.now() - timedelta(minutes=46)
+        self.latest_observation.save(update_fields=['observed_at'])
+        expired = self.client.get(reverse('place-list'), {'crowd_level': 'busy'})
+        self.assertEqual(expired.json()['data']['pagination']['total'], 0)
+        unfiltered = self.client.get(reverse('place-detail', args=[self.gyeongbokgung.pk]))
+        crowd = unfiltered.json()['data']['latest_crowd']
+        self.assertFalse(crowd['is_delayed'])
+        self.assertTrue(crowd['is_expired'])
+
     def test_list_paginates_results(self):
         response = self.client.get(
             reverse('place-list'), {'page': 2, 'page_size': 2}

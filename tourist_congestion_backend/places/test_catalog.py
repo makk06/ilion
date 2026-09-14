@@ -42,10 +42,12 @@ class SeoulCrowdCatalogTests(TestCase):
         catalog = load_seoul_crowd_catalog()
 
         self.assertEqual(catalog.version, '2026-04-14')
-        self.assertEqual(len(catalog.areas), 12)
+        self.assertEqual(len(catalog.areas), 121)
         self.assertEqual(len(catalog.mappings), 13)
         area_ids = {area.external_id for area in catalog.areas}
-        self.assertEqual(len(area_ids), 12)
+        self.assertEqual(len(area_ids), 121)
+        self.assertIn('POI001', area_ids)
+        self.assertIn('POI131', area_ids)
         self.assertIn('POI008', area_ids)
         self.assertIn('POI060', area_ids)
         self.assertTrue(

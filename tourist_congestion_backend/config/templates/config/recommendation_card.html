@@ -1,0 +1,30 @@
+<article class="result-card">
+  {% if item.image_url %}<div class="thumb"><img src="{{ item.image_url }}" alt="{{ item.place.name }} 사진" loading="lazy" referrerpolicy="no-referrer"><span class="thumb-fallback">이미지를 불러올 수 없습니다</span></div>{% endif %}
+  <div class="result-top">
+    <div><span class="rank">#{{ item.rank }}</span><h3>{{ item.place.name }}</h3><div class="address">{{ item.place.address|default:"주소 없음" }}</div></div>
+    {% if item.recommendation_score is not None %}<div class="score"><strong>{{ item.recommendation_score|floatformat:0 }}</strong>추천 점수</div>{% endif %}
+  </div>
+  <div class="tags">
+    <span class="tag">{{ item.place.category }}</span>
+    <span class="tag neutral">{{ item.indoor_label }}{% if item.place.indoor_outdoor_evidence_quality == 'inferred_from_name' %} · 이름 추정{% elif item.place.indoor_outdoor_evidence_quality == 'inferred_from_description' %} · 설명 규칙 추정{% elif item.place.indoor_outdoor_evidence_quality == 'inferred_from_luna' %} · AI 추정{% elif item.place.indoor_outdoor_evidence_quality == 'stale_auto_evidence' %} · 자동 근거 만료{% elif item.place.indoor_outdoor_evidence_quality == 'unattributed' %} · 근거 없음{% endif %}</span>
+    <span class="tag neutral">직선 {{ item.distance_km|floatformat:1 }}km</span>
+    {% if item.place.weather_exposure %}<span class="tag neutral">{{ item.exposure_label }} · {{ item.exposure_source_label }}</span>{% endif %}
+    {% if preview.is_distance %}<span class="tag neutral">거리순 기준 · 날씨 미평가</span>
+    {% elif 'weather' in item.score_contributors %}<span class="tag">날씨 점수 반영{% if preview.virtual %} · 가상{% endif %}</span>
+    {% else %}<span class="tag warn">날씨 점수 미반영</span>{% endif %}
+  </div>
+  <div class="reason-line">{{ item.reasons|join:" · " }}</div>
+  <details class="card-details">
+    <summary>근거·장소 소개 펼치기</summary>
+    {% if item.description %}<p>{{ item.description|truncatechars:280 }}</p>{% else %}<p>저장된 상세 설명이 없습니다.</p>{% endif %}
+    <p><b>실내외 분류:</b> {% if item.place.indoor_outdoor_evidence_quality == 'manual_label' %}수동 확인{% elif item.place.indoor_outdoor_evidence_quality == 'inferred_from_description' %}설명 규칙 추정{% elif item.place.indoor_outdoor_evidence_quality == 'inferred_from_luna' %}AI 인용문 검증 추정 · 필수 실내 근거로 사용하지 않음{% elif item.place.indoor_outdoor_evidence_quality == 'inferred_from_name' %}이름 규칙 추정 · 필수 실내 근거로 사용하지 않음{% else %}유효한 분류 근거 없음{% endif %}{% if item.place.indoor_outdoor_evidence and item.place.indoor_outdoor_evidence_quality != 'stale_auto_evidence' %}<br><b>근거 표현:</b> {{ item.place.indoor_outdoor_evidence }}{% endif %}</p>
+    {% if item.place.weather_exposure %}<p><b>주활동 날씨 노출:</b> {{ item.exposure_label }} · {{ item.exposure_source_label }}{% if item.place.weather_exposure.activity %}<br><b>주활동:</b> {{ item.place.weather_exposure.activity }}{% endif %}<br><b>판단 이유:</b> {{ item.place.weather_exposure.reason }}{% if item.place.weather_exposure.conflict %}<br><b>근거 충돌:</b> {{ item.place.weather_exposure.conflict_reason }}{% endif %}{% if item.place.weather_exposure.type_code %}<br><b>공식 유형:</b> {{ item.place.weather_exposure.type_name }} ({{ item.place.weather_exposure.type_code }}){% endif %}</p>{% endif %}
+    {% if not preview.is_distance %}
+      <p><b>순위에 사용:</b> {{ item.contributors_labels|join:", " }}<br><b>부족한 근거:</b> {% if item.missing_labels %}{{ item.missing_labels|join:", " }}{% else %}없음{% endif %}<br><b>전체 데이터 근거:</b> {{ item.evidence_percent }}% (정확도 아님)</p>
+      <p><b>날씨:</b> {% if item.weather %}{% if preview.virtual %}가상 {{ item.weather_label }} · 실제 발표 없음{% else %}{{ item.weather_label }} · 발표 {{ item.weather.issued_at|date:"m.d H:i" }} · 대상 {{ item.weather.target_at|date:"m.d H시" }}{% endif %} · {{ item.weather.temperature_c|default_if_none:"기온 없음" }}°C · 풍속 {{ item.weather.wind_mps|default_if_none:"없음" }}m/s{% if item.weather_status == 'partial_hazard' %} · 확인된 악조건만 반영{% elif item.weather_status == 'partial_uninformative' %} · 일부 항목만 있어 점수 제외{% endif %}{% else %}사용 가능한 예보 근거 없음{% endif %}</p>
+      <p><b>혼잡:</b> {% if item.crowd %}{{ item.crowd_label }} · 관측 {{ item.crowd.observed_at|date:"m.d H:i" }}{% if item.crowd.is_delayed %}{% if item.crowd_ranked %} · 지연 관측 · 점수 영향 절반{% else %} · 지연 관측 · 순위 미반영{% endif %}{% elif item.crowd.is_stale %} · 15분 초과{% endif %}{% else %}유효한 현재 관측 없음{% endif %}</p>
+      <details class="score-details"><summary>점수 세부 보기</summary><code>원점수 {{ item.score_breakdown }}<br>근거 품질 반영 {{ item.score_effective_breakdown }}<br>거리 보정 {{ item.distance_adjustment }}</code></details>
+    {% else %}<p>이 열은 날씨·혼잡·카테고리 점수를 계산하지 않은 비교 기준입니다.</p>{% endif %}
+    <a href="/api/places/{{ item.place.id }}" target="_blank" rel="noopener">장소 상세 API 확인 ↗</a>
+  </details>
+</article>

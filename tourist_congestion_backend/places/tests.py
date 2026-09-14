@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from decimal import Decimal
 from io import StringIO
 from pathlib import Path
@@ -127,6 +128,20 @@ class TourAPIClientTests(TestCase):
         self.assertEqual(kwargs['params']['pageNo'], 2)
         self.assertEqual(kwargs['params']['modifiedtime'], '20260801')
         self.assertEqual(kwargs['params']['lDongRegnCd'], '11')
+
+    def test_short_last_page_uses_requested_size_for_pagination(self):
+        payload = load_fixture('tourapi_places.json')
+        body = payload['response']['body']
+        body.update(pageNo=69, numOfRows=993, totalCount=68993)
+        response = Mock()
+        response.json.return_value = payload
+        session = Mock(get=Mock(return_value=response))
+
+        page = TourAPIClient(service_key='test-key', session=session).fetch_places_page(
+            page_number=69, page_size=1000)
+
+        self.assertEqual(page.page_size, 1000)
+        self.assertFalse(page.has_next)
 
     def test_missing_required_place_fields_are_not_creatable(self):
         record = normalize_tour_place(
@@ -269,6 +284,41 @@ class TourPlaceSyncServiceTests(TestCase):
         source = PlaceSource.objects.get(external_id='missing-location')
         self.assertIsNone(source.place)
         self.assertEqual(source.match_status, PlaceSource.MatchStatus.MANUAL_REVIEW)
+
+    def test_list_sync_classifies_only_unambiguous_venue_names(self):
+        records = [
+            replace(self.record, external_id='museum', name='바다박물관', category='문화시설'),
+            replace(self.record, external_id='beach', name='푸른해변', category='관광지'),
+            replace(self.record, external_id='restaurant', name='해변식당', category='음식점'),
+            replace(self.record, external_id='ambiguous', name='해변박물관', category='관광지'),
+        ]
+        client = self.make_client()
+        client.fetch_places_page.return_value = TourAPIPage(records, 1, 4, 4)
+
+        TourPlaceSyncService(client).sync()
+
+        labels = dict(Place.objects.values_list('name', 'indoor_outdoor'))
+        self.assertEqual(labels['바다박물관'], Place.IndoorOutdoor.INDOOR)
+        self.assertEqual(labels['푸른해변'], Place.IndoorOutdoor.OUTDOOR)
+        self.assertEqual(labels['해변식당'], Place.IndoorOutdoor.UNKNOWN)
+        self.assertEqual(labels['해변박물관'], Place.IndoorOutdoor.UNKNOWN)
+        self.assertEqual(Place.objects.get(name='바다박물관').indoor_outdoor_evidence, 'name:박물관')
+
+    def test_classification_backfill_preserves_existing_evidence(self):
+        from places.management.commands.backfill_place_classification import Command
+        museum = Place.objects.create(name='작은미술관', category='문화시설',
+                                      region_code='11', address='서울', latitude=37.5, longitude=127)
+        confirmed = Place.objects.create(name='바다박물관', category='관광지',
+                                         region_code='11', address='서울', latitude=37.5, longitude=127,
+                                         indoor_outdoor='outdoor', indoor_outdoor_source='manual')
+
+        Command().handle()
+
+        museum.refresh_from_db()
+        confirmed.refresh_from_db()
+        self.assertEqual(museum.indoor_outdoor, Place.IndoorOutdoor.INDOOR)
+        self.assertEqual(confirmed.indoor_outdoor, Place.IndoorOutdoor.OUTDOOR)
+        self.assertEqual(confirmed.indoor_outdoor_source, 'manual')
 
     def test_dry_run_rolls_back_database_changes(self):
         result = TourPlaceSyncService(self.make_client()).sync(dry_run=True)

@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>추천 백엔드 테스트베드 · 이리온</title>
+  <style>
+    :root { color-scheme: light; --ink:#17252d; --muted:#617179; --line:#dbe4e4; --sea:#0b6664; --pale:#e9f4f0; --paper:#fffdfa; --bg:#f2f5f3; --warn:#a26016; --bad:#b33e36; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; }
+    a { color:var(--sea); }
+    button, input, select { font:inherit; }
+    button { cursor:pointer; }
+    .wrap { max-width:1240px; margin:0 auto; padding:24px 24px 70px; }
+    .test-ribbon { display:inline-flex; align-items:center; gap:8px; border:1px solid #ecb37d; background:#fff0dc; color:#7e4309; padding:7px 12px; border-radius:999px; font-size:12px; font-weight:800; letter-spacing:.02em; }
+    .hero { display:flex; justify-content:space-between; align-items:flex-end; gap:28px; padding:20px 2px 30px; }
+    .hero h1 { font-size:clamp(30px,4vw,49px); letter-spacing:-.055em; line-height:1.13; margin:15px 0 9px; }
+    .hero p { max-width:690px; color:var(--muted); margin:0; }
+    .stamp { flex:none; text-align:right; font-size:12px; color:var(--muted); }
+    .stamp strong { display:block; color:var(--ink); font-size:15px; }
+    .refresh { margin-top:10px; display:inline-block; border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:9px; padding:6px 12px; text-decoration:none; font-weight:700; }
+    .section-heading { display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin:12px 0 13px; }
+    h2 { font-size:20px; letter-spacing:-.03em; margin:0; }
+    h3 { font-size:16px; margin:0 0 12px; }
+    .subtle { color:var(--muted); font-size:12px; }
+    .metrics { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:28px; }
+    .metric { min-height:133px; background:var(--paper); border:1px solid var(--line); border-radius:15px; padding:18px; box-shadow:0 4px 14px #213e3610; }
+    .metric .label { color:var(--muted); font-size:12px; font-weight:700; }
+    .metric .value { display:block; font-size:29px; letter-spacing:-.05em; font-weight:800; margin:8px 0 0; line-height:1.2; }
+    .metric .hint { color:var(--muted); font-size:12px; margin-top:5px; }
+    .main-grid { display:grid; grid-template-columns:minmax(0,1fr); gap:18px; align-items:start; }
+    .panel { background:var(--paper); border:1px solid var(--line); border-radius:17px; padding:23px; box-shadow:0 4px 14px #213e360c; }
+    .panel + .panel { margin-top:18px; }
+    .panel p { margin:0 0 15px; color:var(--muted); }
+    .preset-row { display:flex; align-items:center; flex-wrap:wrap; gap:7px; margin:5px 0 18px; }
+    .preset-row span { color:var(--muted); font-size:12px; margin-right:4px; }
+    .preset { background:#eef5f2; color:var(--sea); border:1px solid #cce2d9; border-radius:999px; padding:5px 14px; font-size:12px; font-weight:800; }
+    .preset:hover, .preset:focus-visible { background:#dceee6; }
+    .fields { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:13px; }
+    .field { display:block; min-width:0; }
+    .field.wide { grid-column:span 2; }
+    .field label { display:block; font-size:12px; font-weight:800; margin-bottom:5px; }
+    .field input, .field select { display:block; width:100%; min-width:0; border:1px solid #cbd9d6; background:#fff; border-radius:9px; padding:9px 10px; color:var(--ink); }
+    .field input:focus, .field select:focus { outline:2px solid #74c7b8; outline-offset:1px; }
+    .field small { display:block; color:var(--muted); font-size:11px; margin-top:4px; }
+    .check-row { display:flex; flex-wrap:wrap; gap:15px; margin:17px 0; }
+    .check-row label { display:flex; align-items:center; gap:7px; font-size:13px; font-weight:700; }
+    .check-row input { accent-color:var(--sea); width:16px; height:16px; }
+    .actions { display:flex; align-items:center; flex-wrap:wrap; gap:11px; }
+    .submit { background:var(--sea); color:white; border:0; border-radius:10px; padding:10px 20px; font-weight:800; }
+    .submit:hover, .submit:focus-visible { background:#094e4c; }
+    .errors { margin:0 0 16px; padding:12px 16px; background:#fff2ef; border:1px solid #f3c9c3; border-radius:10px; color:#8b332c; }
+    .errors ul { margin:4px 0 0; padding-left:19px; }
+    .results { margin-top:18px; }
+    .result-summary { display:flex; flex-wrap:wrap; align-items:baseline; gap:5px 17px; margin:16px 0 12px; }
+    .result-summary strong { font-size:22px; letter-spacing:-.03em; }
+    .summary-chips, .tags { display:flex; flex-wrap:wrap; gap:6px; }
+    .chip, .tag { display:inline-block; border-radius:999px; padding:4px 9px; font-size:11px; font-weight:800; background:#e9f4f0; color:#075c58; }
+    .chip.neutral, .tag.neutral { color:#4f6067; background:#eef1f1; }
+    .chip.warn, .tag.warn { color:#8f5617; background:#fff0d9; }
+    .chip.bad { color:var(--bad); background:#ffe7e4; }
+    .note { background:#f3f6f5; border-left:3px solid #a1b5b0; border-radius:5px; padding:9px 11px; font-size:12px; color:#536269; margin:12px 0; }
+    .result-list { display:grid; gap:10px; margin-top:13px; }
+    .result-card { border:1px solid var(--line); border-radius:13px; background:#fff; padding:16px; }
+    .result-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+    .rank { color:var(--sea); font-weight:900; font-size:12px; }
+    .result-card h3 { margin:2px 0 3px; font-size:17px; line-height:1.35; }
+    .result-card .address { color:var(--muted); font-size:12px; }
+    .score { flex:none; text-align:right; font-size:12px; color:var(--muted); }
+    .score strong { display:block; color:var(--sea); font-size:21px; line-height:1.2; }
+    .tags { margin:11px 0 0; }
+    .description { margin:10px 0 0 !important; color:#405059 !important; font-size:13px; }
+    .evidence { display:flex; gap:8px 17px; flex-wrap:wrap; color:#5b696e; font-size:12px; margin-top:10px; }
+    .evidence b { color:var(--ink); }
+    .fine { border-top:1px solid var(--line); margin-top:12px; padding-top:10px; font-size:11px; color:var(--muted); }
+    .ops-grid { display:grid; gap:18px; }
+    .status-row { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:9px 0; border-bottom:1px solid #e8eeee; font-size:13px; }
+    .status-row:last-child { border-bottom:0; }
+    .status-row strong { text-align:right; }
+    .status-good { color:#08765f; }
+    .status-warn { color:var(--warn); }
+    .status-bad { color:var(--bad); }
+    .status-muted { color:var(--muted); }
+    .table-wrap { overflow:auto; }
+    table { width:100%; border-collapse:collapse; font-size:12px; }
+    th, td { text-align:left; padding:9px 7px; border-bottom:1px solid #e8eeee; vertical-align:top; }
+    th { color:var(--muted); font-weight:700; white-space:nowrap; }
+    td:last-child, th:last-child { text-align:right; }
+    .job-counts { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-bottom:13px; }
+    .job-count { background:#f3f7f5; border-radius:9px; padding:9px 7px; text-align:center; }
+    .job-count strong { display:block; font-size:17px; }
+    .job-count span { color:var(--muted); font-size:11px; }
+    .footer { margin-top:28px; color:var(--muted); font-size:12px; }
+    .scenario-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:9px; margin:17px 0 22px; }
+    .scenario { text-align:left; border:1px solid #c9ddda; background:#f8fcfa; border-radius:12px; padding:12px 13px; color:var(--ink); }
+    .scenario strong { display:block; font-size:13px; }
+    .scenario small { display:block; color:var(--muted); font-size:11px; margin-top:3px; }
+    .scenario.active { background:#e3f4ee; border-color:#4cae99; box-shadow:inset 0 0 0 1px #4cae99; }
+    .scenario:hover, .scenario:focus-visible { border-color:var(--sea); }
+    .experiment { margin-top:18px; }
+    .experiment-columns { display:grid; grid-template-columns:repeat(auto-fit,minmax(235px,1fr)); gap:12px; align-items:start; margin-top:18px; }
+    .experiment-col { border:1px solid var(--line); border-radius:14px; background:#f8fbf9; padding:13px; min-width:0; }
+    .experiment-col h3 { margin:0 0 8px; }
+    .experiment-col .result-card { padding:12px; }
+    .experiment-col .result-card h3 { font-size:15px; }
+    .experiment-col .score strong { font-size:17px; }
+    .experiment-col .result-list { gap:8px; }
+    .compare-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px 12px; margin:10px 0; font-size:12px; }
+    .compare-metrics strong { display:block; font-size:16px; color:var(--sea); }
+    .simulation-banner { border:2px solid #d88d36; background:#fff0d9; color:#7a4309; border-radius:12px; padding:11px 14px; font-weight:800; margin:14px 0; }
+    .result-card .thumb { position:relative; height:112px; background:linear-gradient(135deg,#dce9e3,#f1e7d8); border-radius:9px; overflow:hidden; margin-bottom:10px; }
+    .result-card .thumb img { width:100%; height:100%; display:block; object-fit:cover; }
+    .result-card .thumb .thumb-fallback { display:none; position:absolute; inset:0; align-items:center; justify-content:center; color:#60746c; font-size:12px; }
+    .result-card .thumb.image-failed img { display:none; }
+    .result-card .thumb.image-failed .thumb-fallback { display:flex; }
+    .card-details { border-top:1px solid var(--line); margin-top:11px; padding-top:9px; color:#475960; font-size:12px; }
+    .card-details summary, .more-results summary, .ops-details summary { cursor:pointer; font-weight:800; color:var(--sea); }
+    .card-details p { margin:8px 0 !important; }
+    .more-results { margin-top:9px; }
+    .more-results[open] .result-list { margin-top:10px; }
+    .ops-details { margin-top:12px; }
+    .reason-line { font-size:12px; color:#3e5357; margin-top:9px; }
+    .score-details { margin-top:8px; }
+    .score-details code { display:block; white-space:normal; background:#f3f6f4; padding:7px; border-radius:6px; }
+    .snapshot-details { border:1px solid var(--line); border-radius:12px; background:var(--paper); padding:11px 15px; margin-bottom:18px; font-size:13px; }
+    .snapshot-details summary { cursor:pointer; color:var(--sea); font-weight:800; }
+    .snapshot-details .metrics { margin:14px 0 0; }
+    .ops-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:13px; margin-top:15px; }
+    .ops-grid .panel + .panel { margin-top:0; }
+    @media (max-width:1000px) { .metrics { grid-template-columns:repeat(3,1fr); } .scenario-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .ops-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media (max-width:650px) { .wrap { padding:16px 14px 45px; } .hero { display:block; } .stamp { text-align:left; margin-top:15px; } .metrics { grid-template-columns:repeat(2,1fr); } .metric { min-height:115px; padding:14px; } .metric .value { font-size:24px; } .fields { grid-template-columns:repeat(2,minmax(0,1fr)); } .ops-grid { grid-template-columns:1fr; } .panel { padding:17px; } .scenario-grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="hero">
+      <div>
+        <span class="test-ribbon">● 이리온 백엔드 테스트베드 · 운영 화면 아님</span>
+        <h1>추천이 달라지는 이유를 직접 눌러 보세요</h1>
+        <p>실제 저장된 전국 장소로 추천을 살펴보고, 날씨·취향·필수 조건·거리순을 같은 위치에서 비교합니다. 이 화면은 읽기 전용이며 외부 API를 호출하거나 수집 작업을 만들지 않습니다.</p>
+      </div>
+      <div class="stamp">
+        조회 시각 (KST)
+        <strong>{{ now|date:"Y.m.d H:i:s" }}</strong>
+        <a class="refresh" href="{% url 'backend-test-dashboard' %}">현황 새로고침 ↻</a>
+      </div>
+    </header>
+
+    <details class="snapshot-details" aria-labelledby="collection-title">
+      <summary id="collection-title">저장 현황: 전국 장소 {{ snapshot.total_places|floatformat:0 }}곳 · 실내외 근거 {{ snapshot.classified_count|floatformat:0 }}곳 · 상세/수집 현황 펼치기</summary>
+      <div class="metrics">
+        <div class="metric"><span class="label">장소 목록</span><strong class="value">{{ snapshot.total_places|floatformat:0 }}</strong><div class="hint">전국 저장 건수</div></div>
+        <div class="metric"><span class="label">상세 설명</span><strong class="value">{{ snapshot.detail_count|floatformat:0 }}</strong><div class="hint">목록 대비 {{ snapshot.detail_percent|floatformat:1 }}%</div></div>
+        <div class="metric"><span class="label">실내외 분류</span><strong class="value">{{ snapshot.classified_count|floatformat:0 }}</strong><div class="hint">목록 대비 {{ snapshot.classified_percent|floatformat:1 }}%</div></div>
+        <div class="metric"><span class="label">날씨 예보 격자</span><strong class="value">{{ snapshot.weather_grids|floatformat:0 }}</strong><div class="hint">위치별 수집 · 시각별 범위는 다름</div></div>
+        <div class="metric"><span class="label">혼잡도 연결 장소</span><strong class="value">{{ snapshot.mapped_places|floatformat:0 }}</strong><div class="hint">서울 영역과 명시적으로 연결</div></div>
+      </div>
+    </details>
+
+    <div class="main-grid">
+      <div>
+        <section class="panel" aria-labelledby="try-title">
+          <h2 id="try-title">클릭 실험</h2>
+          <p>도시를 누르면 그 자리의 실제 추천이 즉시 바뀝니다. 아래 조건을 직접 고친 뒤 다섯 실험 중 하나를 누르면 같은 위치에서 비교합니다.</p>
+          <div class="note">현재 장소 {{ snapshot.total_places|floatformat:0 }}곳 중 상세 설명은 {{ snapshot.detail_count|floatformat:0 }}곳({{ snapshot.detail_percent|floatformat:2 }}%)만 저장됐습니다. 추천 상위 장소에도 설명이 없을 수 있습니다.</div>
+          <form method="post" id="dashboard-form">
+            {% csrf_token %}
+            <div class="scenario-grid" aria-label="실험 선택">
+              <button class="scenario {% if form.scenario == 'live' %}active{% endif %}" type="submit" name="scenario" value="live" id="live-submit"><strong>① 실제 추천</strong><small>7개 도시 또는 자유 위치 · 저장된 최신 근거</small></button>
+              <button class="scenario {% if form.scenario == 'weather' %}active{% endif %}" type="submit" name="scenario" value="weather"><strong>② 가상 날씨 3종</strong><small>맑음 ↔ 비 ↔ 강풍 · 예보만 메모리 가정</small></button>
+              <button class="scenario {% if form.scenario == 'taste' %}active{% endif %}" type="submit" name="scenario" value="taste"><strong>③ 여행 vs 식사 vs 쇼핑</strong><small>카테고리 취향만 변경</small></button>
+              <button class="scenario {% if form.scenario == 'strict' %}active{% endif %}" type="submit" name="scenario" value="strict"><strong>④ 근거·실내·한산 필수</strong><small>조건을 더하면 몇 곳이 남을까?</small></button>
+              <button class="scenario {% if form.scenario == 'distance' %}active{% endif %}" type="submit" name="scenario" value="distance"><strong>⑤ 거리순 vs 개선 모델</strong><small>위치·반경·방문시각만 적용하는 비교</small></button>
+            </div>
+            {% if form_errors %}
+              <div class="errors" role="alert"><strong>입력값을 확인해 주세요.</strong>
+                <ul>{% for field, messages in form_errors.items %}{% for message in messages %}<li>{{ field }}: {{ message }}</li>{% endfor %}{% endfor %}</ul>
+              </div>
+            {% endif %}
+            <div class="preset-row"><span>위치 예시 · 누르면 실제 추천 열기</span>{% for city in city_presets %}<button class="preset" type="button" data-latitude="{{ city.latitude }}" data-longitude="{{ city.longitude }}">{{ city.name }}</button>{% endfor %}</div>
+            <div class="fields">
+              <div class="field"><label for="latitude">위도</label><input id="latitude" name="latitude" type="number" step="any" required value="{{ form.latitude }}"></div>
+              <div class="field"><label for="longitude">경도</label><input id="longitude" name="longitude" type="number" step="any" required value="{{ form.longitude }}"></div>
+              <div class="field"><label for="radius_km">반경 (km)</label><input id="radius_km" name="radius_km" type="number" min="0.1" max="100" step="any" required value="{{ form.radius_km }}"></div>
+              <div class="field"><label for="limit">최대 개수</label><input id="limit" name="limit" type="number" min="1" max="10" required value="{{ form.limit }}"></div>
+              <div class="field"><label for="category">선호 카테고리</label><select id="category" name="category"><option value="">기본 여행 추천</option>{% for category in categories %}<option value="{{ category }}" {% if form.category == category %}selected{% endif %}>{{ category }}</option>{% endfor %}</select><small>선택하면 기본 여행 카테고리 점수를 대체합니다</small></div>
+              <div class="field"><label for="crowd_level">선호 혼잡도</label><select id="crowd_level" name="crowd_level"><option value="any" {% if form.crowd_level == 'any' %}selected{% endif %}>상관없음</option><option value="relaxed" {% if form.crowd_level == 'relaxed' %}selected{% endif %}>여유</option><option value="normal" {% if form.crowd_level == 'normal' %}selected{% endif %}>보통</option><option value="busy" {% if form.crowd_level == 'busy' %}selected{% endif %}>혼잡</option><option value="crowded" {% if form.crowd_level == 'crowded' %}selected{% endif %}>매우 혼잡</option></select><small>서울 관측 45분 이내 적용, 30분 초과는 점수 비중 절반</small></div>
+              <div class="field"><label for="required_indoor_outdoor">실내외 필수 조건</label><select id="required_indoor_outdoor" name="required_indoor_outdoor"><option value="">조건 없음</option><option value="indoor" {% if form.required_indoor_outdoor == 'indoor' %}selected{% endif %}>실내만</option><option value="outdoor" {% if form.required_indoor_outdoor == 'outdoor' %}selected{% endif %}>실외만</option><option value="mixed" {% if form.required_indoor_outdoor == 'mixed' %}selected{% endif %}>혼합만</option></select></div>
+              <div class="field"><label for="visit_at">방문 시각 (선택)</label><input id="visit_at" name="visit_at" type="text" placeholder="YYYY-MM-DDTHH:MM:SS+09:00" value="{{ form.visit_at }}"><small>입력 시 UTC 오프셋 필수 · 비우면 현재</small></div>
+            </div>
+            <div class="check-row"><label><input type="checkbox" name="weather_aware" {% if form.weather_aware %}checked{% endif %}> 사용 가능한 날씨를 순위에 반영</label><label><input type="checkbox" name="weather_evidence_required" {% if form.weather_evidence_required %}checked{% endif %}> 날씨·실내외 근거 필수</label><label><input type="checkbox" name="quiet_required" {% if form.quiet_required %}checked{% endif %}> 한산함 필수</label></div>
+            <div class="actions"><button class="submit" type="submit" name="scenario" value="live">입력한 조건으로 실제 추천 보기 →</button><span class="subtle">읽기 전용 · 외부 호출 0건</span></div>
+            <div class="subtle" style="margin-top:10px">비교 실험은 각 설명에 적힌 조건만 바꾸거나 적용합니다. 날씨 예보와 서울 혼잡 관측이 만료되면 근거가 줄어들고 필수 조건 결과는 0개일 수 있습니다.</div>
+          </form>
+        </section>
+
+        {% if preview %}
+        <section class="panel results" aria-live="polite" aria-labelledby="result-title">
+          <h2 id="result-title">추천 결과</h2>
+          <div class="result-summary"><strong>{{ preview.items|length }}개 반환</strong><span class="subtle">조건에 맞는 후보 {{ preview.candidate_count }}개 · 이 PC에서 단일 계산 {{ preview.elapsed_ms }}ms · 방문 {{ preview.visit_at|date:"m.d H:i" }}</span></div>
+          <div class="summary-chips"><span class="chip">날씨 점수 근거 {{ preview.weather_count }}개</span><span class="chip neutral">혼잡 관측 {{ preview.crowd_count }}개</span><span class="chip neutral">상세 설명 {{ preview.detail_count }}개</span></div>
+          <div class="note">상위 결과의 근거 보유 수입니다. 이 시간은 로컬 단일 요청 측정으로 운영 속도나 추천 만족도를 뜻하지 않습니다. 결측 항목은 관측값이 아닌 중립 순위 기준을 적용합니다.</div>
+          {% if preview.message %}<div class="note">{{ preview.message }}</div>{% endif %}
+          {% include 'config/recommendation_cards.html' with preview=preview compact=False %}
+          <div class="fine">추천 엔진 {{ preview.algorithm_version }} · 순위 기준 {{ preview.ranking_basis }} · 이 페이지는 API 결과를 검토하기 위한 임시 시안입니다.</div>
+        </section>
+        {% endif %}
+        {% if experiment %}
+        <section class="panel experiment" aria-live="polite" aria-labelledby="experiment-title">
+          <h2 id="experiment-title">{{ experiment.title }}</h2>
+          {% if experiment.virtual %}<div class="simulation-banner">가상 날씨 실험 · 실제 예보가 아닙니다 · 저장된 예보나 다른 사용자의 추천은 바뀌지 않습니다</div>{% endif %}
+          <p>{{ experiment.description }}</p>
+          <div class="note">아래 열은 같은 위치·반경·방문 시각의 결과입니다. 1위와 평균 직선거리, 실내외 분류 근거 수를 먼저 비교하세요. 상위 3곳을 먼저 보이고 나머지는 펼칠 수 있습니다.</div>
+          <div class="experiment-columns {% if experiment.panels|length == 2 %}two{% endif %}">
+            {% for panel in experiment.panels %}
+            <div class="experiment-col">
+              <h3>{{ panel.title }}</h3>
+              <div class="compare-metrics">
+                <div><span>추천</span><strong>{{ panel.preview.items|length }} / {{ form.limit }}</strong></div>
+                <div><span>1위</span><strong>{% if panel.preview.top_name %}{{ panel.preview.top_name|truncatechars:18 }}{% else %}없음{% endif %}</strong></div>
+                <div><span>평균 직선거리</span><strong>{% if panel.preview.mean_distance_km is not None %}{{ panel.preview.mean_distance_km }}km{% else %}—{% endif %}</strong></div>
+                <div><span>실내외 근거</span><strong>{{ panel.preview.classified_count }}곳</strong></div>
+              </div>
+              <div class="summary-chips"><span class="chip {% if panel.top_changed and panel.top_comparison_available %}warn{% else %}neutral{% endif %}">{% if forloop.first %}비교 기준{% elif not panel.top_comparison_available %}1위 비교 불가{% elif panel.top_changed %}1위 변경{% else %}1위 유지{% endif %}</span><span class="chip neutral">기준과 상위 {{ form.limit }} 중 {{ panel.overlap }}곳 겹침</span>{% if not panel.preview.is_distance %}<span class="chip">날씨 기여 {{ panel.preview.weather_count }}곳{% if panel.preview.virtual %} · 가상{% endif %}</span>{% endif %}</div>
+              {% if panel.preview.message %}<div class="note">{{ panel.preview.message }}</div>{% endif %}
+              {% include 'config/recommendation_cards.html' with preview=panel.preview compact=True %}
+            </div>
+            {% endfor %}
+          </div>
+        </section>
+        {% endif %}
+      </div>
+
+      <details class="snapshot-details" style="margin-top:18px">
+        <summary>주활동 날씨 노출 사례 {{ weather_profile_cases|length }}건 펼치기 · 공식 유형은 약한 추정</summary>
+        <p class="subtle">실내외 분류와 날씨 노출은 다른 판단입니다. 예를 들어 경복궁은 실내외 분류가 미확인이어도 공식 고궁 유형으로 날씨 영향을 약하게 반영합니다. 이 유형 추정은 개별 장소의 실측·수동 확인이 아니며 ‘실내 필수’ 근거로 쓸 수 없습니다.</p>
+        <div class="table-wrap"><table><thead><tr><th>장소</th><th>실내외 / 날씨 노출</th><th>주활동·판단 근거</th><th>출처·상태</th></tr></thead><tbody>{% for case in weather_profile_cases %}<tr><td><a href="/api/places/{{ case.place.id }}" target="_blank" rel="noopener">{{ case.place.name }}</a></td><td>{{ case.indoor_label }} / {{ case.label }}</td><td>{% if case.profile.activity %}{{ case.profile.activity }}<br>{% endif %}{{ case.profile.reason }}{% if case.profile.conflict %}<br><small>충돌: {{ case.profile.conflict_reason }}</small>{% endif %}</td><td>{{ case.source_label }}{% if case.profile.type_code %}<br><small>{{ case.profile.type_name }} ({{ case.profile.type_code }})</small>{% endif %}<br><small>{% if case.profile.persisted %}현재 정책으로 저장됨{% else %}요청 시 계산{% endif %}</small></td></tr>{% empty %}<tr><td colspan="4">저장된 사례 장소가 없습니다.</td></tr>{% endfor %}</tbody></table></div>
+      </details>
+
+      <details class="snapshot-details" style="margin-top:18px">
+        <summary>설명 기반 실내외 분류 사례 {{ classification_cases|length }}건 펼치기 · AI 시도 {{ luna_attempt_count }}건</summary>
+        <p class="subtle">장소명·공개 설명에서 주된 방문 활동과 별도 시설을 구분한 자동 추정 사례입니다. 수동 확인이나 정확도 보증이 아닙니다. AI 추정은 낮은 점수 비중으로만 쓰며 필수 실내 근거가 아닙니다. AI 분류는 공개 API 요청에서 실행되지 않습니다.</p>
+        <div class="table-wrap"><table><thead><tr><th>장소</th><th>이전 → 현재</th><th>원문 근거·판단 이유</th><th>상태</th></tr></thead><tbody>{% for case in classification_cases %}<tr><td><a href="/api/places/{{ case.place_id }}" target="_blank" rel="noopener">{{ case.place.name }}</a></td><td>{{ case.display_previous }} → {{ case.display_label }}<br>{{ case.display_method }}</td><td>{{ case.quote }}{% if case.rationale %}<br><small>{{ case.rationale }}</small>{% endif %}</td><td>{% if case.is_current %}현재 입력과 일치{% else %}입력 변경 · 근거 만료{% endif %}</td></tr>{% empty %}<tr><td colspan="4">적용된 설명 기반 분류가 없습니다.</td></tr>{% endfor %}</tbody></table></div>
+      </details>
+
+      <aside aria-label="백엔드 작업 현황"><details class="ops-details panel"><summary>데이터 신선도 · 수집 작업 · 호출 예산 펼치기</summary><div class="ops-grid">
+        <section class="panel"><h2>데이터의 신선도</h2><p>행 개수와 현재 사용 가능한 근거는 다릅니다.</p>
+          <div class="status-row"><span>최근 예보 발행</span><strong>{% if snapshot.weather_latest.issued %}{{ snapshot.weather_latest.issued|date:"m.d H:i" }}{% else %}없음{% endif %}</strong></div>
+          <div class="status-row"><span>최근 예보 저장</span><strong>{% if snapshot.weather_latest.fetched %}{{ snapshot.weather_latest.fetched|date:"m.d H:i" }}{% else %}없음{% endif %}</strong></div>
+          <div class="status-row"><span>서울 혼잡 영역</span><strong>{{ snapshot.crowd_areas|length }}개 중 {{ snapshot.crowd_fresh }}개 신선 · {{ snapshot.crowd_valid }}개 추천 사용 가능 ({{ snapshot.crowd_delayed }}개 지연)</strong></div>
+          <div class="subtle" style="margin-top:11px">15분 이내 신선, 15~30분 일반 사용, 30~45분 지연 표시·점수 비중 절반, 45분 초과 만료입니다. 지연 관측은 ‘반드시 한산’ 조건에 사용할 수 없습니다. 전국 혼잡 데이터는 아닙니다.</div>
+          <details class="ops-details"><summary>영역별 관측 {{ snapshot.crowd_areas|length }}개 펼치기</summary>{% for area in snapshot.crowd_areas %}<div class="status-row"><span>{{ area.name }}</span><strong class="status-{{ area.freshness_class }}">{{ area.latest_level_label }} · {{ area.freshness }}{% if area.latest_observed_at %} · {{ area.latest_observed_at|date:"m.d H:i" }}{% endif %}</strong></div>{% empty %}<div class="note">저장된 서울 혼잡 영역이 없습니다.</div>{% endfor %}</details>
+        </section>
+        <section class="panel"><h2>수집 작업</h2><p>DB에 기록된 작업입니다. 실행 중 수만으로 워커 상주 여부를 판단할 수 없습니다.</p>
+          <div class="job-counts"><div class="job-count"><strong>{{ snapshot.job_counts.pending }}</strong><span>대기</span></div><div class="job-count"><strong>{{ snapshot.job_counts.running }}</strong><span>실행 중</span></div><div class="job-count"><strong>{{ snapshot.job_counts.succeeded }}</strong><span>성공</span></div><div class="job-count"><strong>{{ snapshot.job_counts.failed }}</strong><span>실패</span></div></div>
+          <div class="table-wrap"><table><thead><tr><th>최근 작업</th><th>상태</th><th>처리</th></tr></thead><tbody>{% for job in snapshot.recent_jobs %}<tr><td>{{ job.kind }}<div class="subtle">{{ job.created_at|date:"m.d H:i" }}{% if job.error_code %} · {{ job.error_code }}{% endif %}</div></td><td>{{ job.get_status_display }}</td><td>{{ job.processed }}</td></tr>{% empty %}<tr><td colspan="3">기록된 작업이 없습니다.</td></tr>{% endfor %}</tbody></table></div>
+        </section>
+        <section class="panel"><h2>오늘의 호출 예산</h2><p>공통 워커가 DB에 기록한 사용량입니다. 직접 실행한 구형 수집 명령의 호출까지 포함한 총량은 아닙니다.</p>
+          <div class="table-wrap"><table><thead><tr><th>공급자</th><th>기록 사용</th><th>설정 상한</th></tr></thead><tbody>{% for budget in snapshot.budgets %}<tr><td>{{ budget.name }}</td><td>{{ budget.used }}회<div class="subtle">정기 {{ budget.regular }} · 보충 {{ budget.supplemental }} · 예비 {{ budget.reserve }}</div></td><td>{{ budget.limit }}</td></tr>{% endfor %}</tbody></table></div>
+        </section>
+      </div></details></aside>
+    </div>
+    <footer class="footer">이리온 백엔드 임시 테스트베드 · 로컬 개발 환경(DEBUG=true)에서만 열립니다. 외부 API 호출·DB 갱신·서비스 품질 보증 기능은 포함하지 않습니다.</footer>
+  </main>
+  <script>
+    for (const button of document.querySelectorAll('.preset')) {
+      button.addEventListener('click', () => {
+        document.getElementById('latitude').value = button.dataset.latitude;
+        document.getElementById('longitude').value = button.dataset.longitude;
+        document.getElementById('dashboard-form').requestSubmit(document.getElementById('live-submit'));
+      });
+    }
+    for (const img of document.querySelectorAll('.thumb img')) {
+      img.addEventListener('error', () => img.parentElement.classList.add('image-failed'));
+      if (img.complete && img.naturalWidth === 0) img.parentElement.classList.add('image-failed');
+    }
+  </script>
+</body>
+</html>

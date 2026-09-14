@@ -13,6 +13,7 @@ class Place(models.Model):
         UNKNOWN = 'unknown', 'Unknown'
         INDOOR = 'indoor', 'Indoor'
         OUTDOOR = 'outdoor', 'Outdoor'
+        MIXED = 'mixed', 'Mixed'
 
     class OpenStatus(models.TextChoices):
         OPEN = 'OPEN', 'Open'
@@ -38,6 +39,8 @@ class Place(models.Model):
         choices=IndoorOutdoor,
         default=IndoorOutdoor.UNKNOWN,
     )
+    indoor_outdoor_source = models.CharField(max_length=30, blank=True)
+    indoor_outdoor_evidence = models.CharField(max_length=255, blank=True)
     open_status = models.CharField(
         max_length=6,
         choices=OpenStatus,
@@ -258,3 +261,8 @@ class CrowdData(models.Model):
 
     def __str__(self):
         return f'{self.crowd_area} at {self.observed_at}'
+
+
+from .weather_models import WeatherForecast  # noqa: E402,F401
+from .job_models import DataJob, ProviderCallBudget  # noqa: E402,F401
+from .classification_models import PlaceClassificationEvidence, PlaceClassificationAttempt, PlaceWeatherExposure  # noqa: E402,F401

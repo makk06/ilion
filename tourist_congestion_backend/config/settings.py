@@ -54,7 +54,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
+    'config',
     'places.apps.PlacesConfig',
+    'recommendations',
     'users.apps.UsersConfig',
 ]
 
@@ -160,3 +162,26 @@ SIMPLE_JWT = {
 
 # Google OAuth (구글 로그인 ID Token 검증용)
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+
+# Explainable starting weights and weather thresholds; adjust after product validation.
+RECOMMENDATION_WEIGHTS = {
+    'distance': 0.30, 'category': 0.15, 'crowd': 0.20,
+    'weather': 0.25, 'indoor_outdoor': 0.10,
+}
+CROWD_FRESH_MINUTES = 15
+CROWD_FULL_WEIGHT_MINUTES = 30
+CROWD_MAX_AGE_MINUTES = 45
+CROWD_DELAYED_WEIGHT_FACTOR = 0.5
+WEATHER_THRESHOLDS = {'wind_mps': 9.0, 'hot_c': 33.0, 'cold_c': -10.0}
+# A development freshness allowance: KMA village forecasts are issued every
+# three hours. One missed issue is tolerated; fetched_at never extends it.
+WEATHER_MAX_ISSUE_AGE_HOURS = 5
+# This is a ranking distance scale, independent of the request's hard radius.
+RECOMMENDATION_DISTANCE_SCALE_KM = 2.5
+# Retain a real distance cost beyond the close neighborhood, even when the
+# request's hard radius is large (for example 100 km).
+RECOMMENDATION_DISTANCE_GUARD_FREE_KM = 5.0
+RECOMMENDATION_DISTANCE_GUARD_SCALE_KM = 20.0
+RECOMMENDATION_NAME_RULE_WEIGHT_FACTOR = 0.5
+RECOMMENDATION_DESCRIPTION_RULE_WEIGHT_FACTOR = 0.75
+RECOMMENDATION_LUNA_VALIDATED_WEIGHT_FACTOR = 0.5
