@@ -13,6 +13,9 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
+
+from django.core.exceptions import ImproperlyConfigured
 
 from dotenv import load_dotenv
 
@@ -32,6 +35,12 @@ SECRET_KEY = os.environ.get(
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() == 'true'
+if not DEBUG and (SECRET_KEY.startswith('django-insecure-') or len(SECRET_KEY) < 50):
+    raise ImproperlyConfigured('Set a production DJANGO_SECRET_KEY of at least 50 characters.')
+
+APP_BASE_URL = os.environ.get('APP_BASE_URL', '').rstrip('/')
+STORAGE_DIR = Path(os.environ.get('STORAGE_DIR') or BASE_DIR)
+DATA_WORKER_ENABLED = os.environ.get('DATA_WORKER_ENABLED', 'false').lower() == 'true'
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -41,6 +50,18 @@ ALLOWED_HOSTS = [
     ).split(',')
     if host.strip()
 ]
+if APP_BASE_URL:
+    ALLOWED_HOSTS.append(urlsplit(APP_BASE_URL).hostname)
+CSRF_TRUSTED_ORIGINS = [APP_BASE_URL] if APP_BASE_URL else []
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_REDIRECT_EXEMPT = [r'^healthz$']
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+# The managed edge contract covers this exact hostname, not arbitrary child hosts
+# or browser preload enrollment. Keep all other deployment warnings actionable.
+SILENCED_SYSTEM_CHECKS = ['security.W005', 'security.W021']
 
 
 # Application definition
@@ -64,6 +85,7 @@ AUTH_USER_MODEL = 'users.User'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -98,7 +120,8 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': STORAGE_DIR / 'db.sqlite3',
+        'OPTIONS': {'timeout': 20, 'transaction_mode': 'IMMEDIATE'},
     }
 }
 
@@ -138,6 +161,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+MEDIA_ROOT = STORAGE_DIR / 'media'
 
 
 # Default primary key field type

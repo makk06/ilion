@@ -57,6 +57,13 @@ def claim_job():
     # A killed process is retried after its lease expires, keeping the page cursor.
     DataJob.objects.filter(status=DataJob.Status.RUNNING, leased_at__lt=now - timedelta(minutes=5)).update(
         status=DataJob.Status.PENDING, run_after=now, leased_at=None)
+    # Old live observations must not build up and spend tomorrow's allowance.
+    DataJob.objects.filter(status='pending', kind='seoul_crowd',
+                           created_at__lt=now - timedelta(minutes=15)).update(
+        status='failed', error_code='ExpiredWindow', finished_at=now)
+    DataJob.objects.filter(status='pending', kind='weather',
+                           created_at__lt=now - timedelta(hours=5)).update(
+        status='failed', error_code='ExpiredWindow', finished_at=now)
     job = DataJob.objects.filter(status=DataJob.Status.PENDING, run_after__lte=now).order_by('run_after', 'id').first()
     if job:
         job.status = DataJob.Status.RUNNING
@@ -85,7 +92,9 @@ def _execute(job):
                 service._sync_record(record)
                 processed += 1
         job.processed += processed
-        more = page.has_next and bool(page.records) and job.cursor < int(job.payload.get('max_pages') or 100000)
+        more = page.has_next and bool(page.records)
+        if more and job.cursor >= int(job.payload.get('max_pages') or 100000):
+            raise PageLimitExceeded('TourAPI page limit reached before the end of the catalogue')
         return more
     if job.kind == 'tour_detail':
         from places.integrations.tour_api import TourAPIClient
@@ -162,6 +171,10 @@ def run_one():
         return None
     try:
         more = _execute(job)
+    except PageLimitExceeded:
+        job.status = DataJob.Status.FAILED
+        job.error_code = 'PageLimitExceeded'
+        job.finished_at = timezone.now()
     except (BudgetExceeded, ExternalAPIQuotaError) as exc:
         job.status = DataJob.Status.PENDING
         job.error_code = type(exc).__name__
@@ -193,3 +206,7 @@ def run_one():
     job.leased_at = None
     job.save()
     return job
+
+
+class PageLimitExceeded(RuntimeError):
+    pass

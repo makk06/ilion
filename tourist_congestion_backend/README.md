@@ -1,6 +1,6 @@
 # 여유로 Django 백엔드
 
-전국 최대 10개 추천과 날씨·실내외 수집 기반은 [추천 MVP 계약](./docs/recommendation-mvp.md)에 실행 명령과 API 형식이 있습니다. 로컬 DB는 SQLite이고 운영 DB는 아직 정하지 않았습니다.
+전국 최대 10개 추천과 날씨·실내외 수집 기반은 [추천 MVP 계약](./docs/recommendation-mvp.md)에 실행 명령과 API 형식이 있습니다. Pi 배포는 SQLite `/data`와 단일 운영 수집 워커를 사용합니다. [Pi 배포 안내](./docs/pi-deployment.md)에 초기 데이터, Secrets, 예약과 검증 절차를 정리했습니다. 추천 알고리즘은 개발 중인 MVP입니다.
 
 전국 목록 전체 수집과 로컬 운영 검증의 결과·한계는 [2026-09-12 검증 기록](./docs/operation-validation-2026-09-12.md)에 있습니다.
 제품 실용성 판단과 다음 개선 순서는 [백엔드 실용성 보고서](../BACKEND_PRACTICALITY_REPORT.md)에 있습니다.
@@ -179,8 +179,9 @@ TourAPI 필수 값이 빠진 레코드는 버리지 않고 `PlaceSource`에
 python manage.py map_place_crowd_area PLACE_ID AREA_CD
 ```
 
-실제 운영 주기 실행은 아직 포함하지 않습니다. 호출 한도와 최초 대상 지역을
-확정한 뒤 cron 또는 별도 스케줄러가 위 명령을 호출하도록 구성합니다.
+Pi 운영에서는 `run_data_worker --scheduled`가 컨테이너와 함께 시작됩니다.
+위 직접 수집 명령을 cron에 추가하지 않습니다. 운영 수집은 공통 작업 큐로 일원화하며
+예약·한도·최초 등록 순서는 [Pi 배포 안내](./docs/pi-deployment.md)를 따릅니다.
 
 서울 열린데이터광장 실시간 API는 공식적으로 `openapi.seoul.go.kr:8088`의
 HTTP 엔드포인트를 제공합니다. 키가 URL에 포함되므로 애플리케이션은 요청 URL과

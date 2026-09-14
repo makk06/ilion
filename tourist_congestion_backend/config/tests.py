@@ -9,7 +9,7 @@ from places.models import CrowdArea, CrowdData, DataJob, ExternalSource, Place, 
 from places.services.weather import grid_for
 
 
-class HealthzTests(SimpleTestCase):
+class HealthzTests(TestCase):
     def test_healthz_returns_ok(self):
         response = self.client.get(reverse('healthz'))
 

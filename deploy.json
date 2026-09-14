@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "appId": "ilion",
+  "imageRepository": "ghcr.io/hurdoo/ilion",
+  "displayName": "ILION Backend MVP",
+  "description": "개발 중인 추천 알고리즘 MVP · 운영 단일 수집 워커",
+  "containerPort": 8000,
+  "healthPath": "/healthz",
+  "access": "private",
+  "dataEnabled": true,
+  "resources": {"memoryMiB": 1024, "cpus": 1, "pids": 128},
+  "ingressProfile": "standard",
+  "environment": {
+    "DJANGO_DEBUG": "false",
+    "DJANGO_ALLOWED_HOSTS": "127.0.0.1,localhost",
+    "GOOGLE_CLIENT_ID": "",
+    "DATA_WORKER_ENABLED": "true",
+    "TOUR_API_DAILY_LIMIT": "1000",
+    "SEOUL_DAILY_LIMIT": "18000",
+    "KMA_DAILY_LIMIT": "10000",
+    "TOUR_SYNC_MAX_PAGES": "100",
+    "TOUR_DETAIL_DAILY_PLACES": "150",
+    "WEATHER_REGULAR_GRIDS": "35"
+  },
+  "requiredSecrets": ["DJANGO_SECRET_KEY"],
+  "optionalSecrets": ["TOUR_API_SERVICE_KEY", "SEOUL_OPEN_API_KEY", "KMA_SERVICE_KEY"],
+  "platform": "linux/arm64",
+  "dockerfile": "Dockerfile",
+  "context": ".",
+  "checks": [["sh", "scripts/check-backend.sh"]]
+}

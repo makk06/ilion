@@ -2,6 +2,7 @@ import fcntl
 import json
 import os
 import time
+import signal
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -22,32 +23,58 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--once', action='store_true')
         parser.add_argument('--dev', action='store_true')
+        parser.add_argument('--scheduled', action='store_true', help='Run the production schedules and durable queue.')
         parser.add_argument('--max-jobs', type=int, default=0,
                             help='Stop after this many jobs; zero keeps running.')
 
     def handle(self, *args, **options):
         if options['max_jobs'] < 0:
             raise CommandError('--max-jobs must be non-negative')
-        lock_path = settings.BASE_DIR / '.data-worker.lock'
+        if options['dev'] and options['scheduled']:
+            raise CommandError('Choose either --dev or --scheduled')
+        lock_path = settings.STORAGE_DIR / '.data-worker.lock'
+        heartbeat = settings.STORAGE_DIR / '.data-worker-heartbeat'
+        stopping = False
+        previous_handlers = {}
+        def stop(signum, frame):
+            nonlocal stopping
+            stopping = True
+        if options['scheduled']:
+            for signum in (signal.SIGTERM, signal.SIGINT):
+                previous_handlers[signum] = signal.signal(signum, stop)
         with open(lock_path, 'a') as lock:
             try:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
                 raise CommandError('One data worker is already running') from None
             processed = 0
-            while True:
+            last_schedule = None
+            while not stopping:
+                if options['scheduled']:
+                    heartbeat.touch()
+                    minute = timezone.now().replace(second=0, microsecond=0)
+                    if minute != last_schedule:
+                        from places.services.scheduling import schedule
+                        schedule()
+                        last_schedule = minute
                 if options['dev']:
                     self._schedule_dev()
                 job = run_one()
                 if job:
                     processed += 1
                     self.stdout.write(f'job={job.id} kind={job.kind} status={job.status} cursor={job.cursor} processed={job.processed} error={job.error_code}')
+                if options['scheduled']:
+                    heartbeat.touch()
                 if options['once'] or options['max_jobs'] and processed >= options['max_jobs']:
                     break
                 if not job:
                     if options['max_jobs']:
                         break
-                    time.sleep(5)
+                    time.sleep(1 if options['scheduled'] else 5)
+                elif options['scheduled']:
+                    time.sleep(1)
+        for signum, handler in previous_handlers.items():
+            signal.signal(signum, handler)
 
     @staticmethod
     def _schedule_dev():
