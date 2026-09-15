@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from places.models import CrowdArea, CrowdData, DataJob, ExternalSource, Place, PlaceCrowdArea, PlaceSource, ProviderCallBudget, WeatherForecast
 from places.services.weather import grid_for
+from config.test_dashboard import prepare_recommendations as dashboard_prepare_recommendations
 
 
 class HealthzTests(TestCase):
@@ -233,8 +234,11 @@ class BackendTestDashboardTests(TestCase):
             indoor_outdoor='indoor', indoor_outdoor_source='manual')
         Place.objects.create(name='미분류', category='관광지', region_code='11',
             address='서울', latitude=37.575, longitude=126.978)
-        response = self.client.post(self.url, {'scenario': 'strict', 'latitude': '37.575',
-            'longitude': '126.977', 'radius_km': '1', 'limit': '10', 'crowd_level': 'any'})
+        with patch('config.test_dashboard.prepare_recommendations',
+                   wraps=dashboard_prepare_recommendations) as prepare:
+            response = self.client.post(self.url, {'scenario': 'strict', 'latitude': '37.575',
+                'longitude': '126.977', 'radius_km': '1', 'limit': '10', 'crowd_level': 'any'})
+        prepare.assert_called_once()
         self.assertEqual(response.status_code, 200)
         panels = [p['preview'] for p in response.context['experiment']['panels']]
         self.assertEqual([len(p['items']) for p in panels], [2, 0, 1, 0])

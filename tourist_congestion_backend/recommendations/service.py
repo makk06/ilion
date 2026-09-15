@@ -1,4 +1,5 @@
 import time
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from django.conf import settings
@@ -6,7 +7,7 @@ from django.utils import timezone
 
 from places.models import Place, PlaceCrowdArea, PlaceInfo
 from places.views import _haversine_km, _nearby_bounding_box, _visible_places
-from places.services.weather import forecast_for, grid_for, latest_available_issue
+from places.services.weather import forecast_for, forecasts_for, grid_for, latest_available_issue
 from places.services.jobs import enqueue
 from places.job_models import DataJob
 from places.services.weather import KST
@@ -41,6 +42,56 @@ DEFAULT_CATEGORY_REASONS = {
     '음식점': '주변 음식점으로 등록된 장소입니다.',
     '쇼핑': '주변 쇼핑 장소로 등록된 곳입니다.',
 }
+
+
+_CANDIDATE_FIELDS = (
+    'id', 'name', 'category', 'subcategory', 'address', 'latitude', 'longitude',
+    'indoor_outdoor', 'indoor_outdoor_source', 'indoor_outdoor_evidence', 'open_status',
+    'info__description',
+    'classification_record__label', 'classification_record__method',
+    'classification_record__version', 'classification_record__input_hash',
+    'classification_record__quote', 'classification_record__span_start',
+    'classification_record__span_end', 'classification_record__evidence_quotes',
+    'classification_record__primary_activity', 'classification_record__scope',
+    'classification_record__ancillary_note', 'classification_record__rationale',
+    'classification_record__weather_exposure', 'classification_record__weather_activity',
+    'classification_record__weather_reason',
+    'weather_exposure_record__level', 'weather_exposure_record__activity',
+    'weather_exposure_record__source', 'weather_exposure_record__reason',
+    'weather_exposure_record__conflict', 'weather_exposure_record__conflict_reason',
+    'weather_exposure_record__type_code', 'weather_exposure_record__type_name',
+    'weather_exposure_record__factor', 'weather_exposure_record__version',
+    'weather_exposure_record__input_hash',
+)
+
+
+@dataclass(slots=True)
+class PreparedRecommendations:
+    now: datetime
+    visit_at: datetime
+    scope: tuple
+    required_indoor_outdoor: object
+    candidates: list
+    classification_qualities: dict
+    weather_profiles: dict
+    grids: dict
+    forecasts: dict
+
+
+@dataclass(slots=True)
+class _CandidateEvaluation:
+    distance: float
+    place: object
+    crowd: object
+    classification_quality: str
+    profile: object
+    forecast: object
+    weather_fit: object
+    weather_factors: list
+    weather_status: str
+    raw_scores: dict
+    evidence_factors: dict
+    rank_score: float = 0
 
 
 def _event_valid_at(raw_data, visit_at):
@@ -147,6 +198,106 @@ def _crowd(place, visit_at, now):
     }
 
 
+def _context_scope(criteria, visit_at):
+    return (
+        float(criteria['latitude']), float(criteria['longitude']),
+        float(criteria['radius_km']), visit_at,
+        tuple(sorted(criteria.get('required_categories') or ())),
+    )
+
+
+def _with_candidate_data(queryset):
+    return queryset.select_related(
+        'classification_record', 'info', 'weather_exposure_record',
+    ).only(*_CANDIDATE_FIELDS)
+
+
+def _load_candidates(criteria, visit_at):
+    lat, lon = criteria['latitude'], criteria['longitude']
+    radius = criteria['radius_km']
+    lat_min, lat_max, lon_min, lon_max = _nearby_bounding_box(lat, lon, radius)
+    queryset = _visible_places().filter(
+        category__in=MVP_CATEGORIES,
+        latitude__gte=lat_min, latitude__lte=lat_max,
+        longitude__gte=lon_min, longitude__lte=lon_max,
+    ).exclude(open_status=Place.OpenStatus.CLOSED)
+    required_categories = criteria.get('required_categories') or []
+    if required_categories:
+        queryset = queryset.filter(category__in=required_categories)
+    if criteria.get('required_indoor_outdoor'):
+        queryset = queryset.filter(indoor_outdoor=criteria['required_indoor_outdoor']).exclude(
+            indoor_outdoor_source='')
+    queryset = _with_candidate_data(queryset)
+    valid_event_ids = {
+        place_id for place_id, raw_data in PlaceInfo.objects.filter(
+            place__category='축제/공연/행사',
+            place__latitude__gte=lat_min, place__latitude__lte=lat_max,
+            place__longitude__gte=lon_min, place__longitude__lte=lon_max,
+        ).values_list('place_id', 'raw_data')
+        if _event_valid_at(raw_data, visit_at)
+    }
+    candidates = []
+    classification_qualities = {}
+    for place in queryset:
+        if place.category == '축제/공연/행사' and place.id not in valid_event_ids:
+            continue
+        if criteria.get('required_indoor_outdoor'):
+            quality = _classification_quality(place)
+            classification_qualities[place.id] = quality
+            if quality[0] not in {'manual_label', 'inferred_from_description'}:
+                continue
+        distance = _haversine_km(lat, lon, place)
+        if distance <= radius:
+            candidates.append((distance, place))
+    candidates.sort(key=lambda item: (item[0], item[1].id))
+    return candidates, classification_qualities
+
+
+def prepare_recommendations(criteria, *, now=None, supplement=True):
+    """Hydrate request-invariant recommendation inputs once for one or more rankings."""
+    now = now or timezone.now()
+    visit_at = criteria.get('visit_at') or now
+    candidates, classification_qualities = _load_candidates(criteria, visit_at)
+    weather_profiles = _profiles_for_candidates(candidates)
+    if supplement:
+        jobs = _prepare_jobs(
+            candidates, visit_at, now,
+            weather_requested=(criteria.get('weather_aware', True)
+                               or bool(criteria.get('weather_evidence_required'))),
+            crowd_requested=True,
+            weather_profiles=weather_profiles,
+        )
+        if _wait_for_running_jobs(jobs):
+            refreshed = {
+                place.id: place for place in _with_candidate_data(
+                    _visible_places().filter(id__in=[place.id for _, place in candidates])
+                )
+            }
+            candidates = [(distance, refreshed.get(place.id, place))
+                          for distance, place in candidates]
+            classification_qualities = {}
+            weather_profiles = _profiles_for_candidates(candidates)
+    for _, place in candidates:
+        classification_qualities.setdefault(place.id, _classification_quality(place))
+    grids = {
+        place.id: grid_for(place.latitude, place.longitude) if weather_profiles[place.id].factor else None
+        for _, place in candidates
+    }
+    return PreparedRecommendations(
+        now=now,
+        visit_at=visit_at,
+        scope=_context_scope(criteria, visit_at),
+        required_indoor_outdoor=criteria.get('required_indoor_outdoor'),
+        candidates=candidates,
+        classification_qualities=classification_qualities,
+        weather_profiles=weather_profiles,
+        grids=grids,
+        forecasts=forecasts_for(
+            {grid for grid in grids.values() if grid is not None}, visit_at, now,
+        ),
+    )
+
+
 def _prepare_jobs(candidates, visit_at, now, *, weather_requested=False,
                   crowd_requested=False, weather_profiles=None):
     if weather_requested and weather_profiles is None:
@@ -209,83 +360,47 @@ def _wait_for_running_jobs(jobs):
     return False
 
 
-def recommend(criteria, user=None, *, now=None, supplement=True, forecast_lookup=None):
-    now = now or timezone.now()
-    # The DEBUG testbed may supply an in-memory forecast. Normal API requests
-    # always use stored forecasts; no process-wide patch or database mutation.
-    forecast_lookup = forecast_lookup or forecast_for
+def recommend(criteria, user=None, *, now=None, supplement=True, forecast_lookup=None,
+              prepared=None):
+    now = now or (prepared.now if prepared is not None else timezone.now())
     visit_at = criteria.get('visit_at') or now
-    lat, lon = criteria['latitude'], criteria['longitude']
-    radius = criteria['radius_km']
-    lat_min, lat_max, lon_min, lon_max = _nearby_bounding_box(lat, lon, radius)
-    queryset = _visible_places().filter(
-        category__in=MVP_CATEGORIES,
-        latitude__gte=lat_min, latitude__lte=lat_max,
-        longitude__gte=lon_min, longitude__lte=lon_max,
-    ).exclude(open_status=Place.OpenStatus.CLOSED).select_related(
-        'classification_record', 'info', 'weather_exposure_record')
-    required_categories = criteria.get('required_categories') or []
-    if required_categories:
-        queryset = queryset.filter(category__in=required_categories)
-    if criteria.get('required_indoor_outdoor'):
-        queryset = queryset.filter(indoor_outdoor=criteria['required_indoor_outdoor']).exclude(
-            indoor_outdoor_source='')
-    # The list endpoint has no event dates. Intro details do; exclude expired
-    # and unverified events instead of treating them as open on every day.
-    valid_event_ids = {
-        place_id for place_id, raw_data in PlaceInfo.objects.filter(
-            place__category='축제/공연/행사',
-            place__latitude__gte=lat_min, place__latitude__lte=lat_max,
-            place__longitude__gte=lon_min, place__longitude__lte=lon_max,
-        ).values_list('place_id', 'raw_data')
-        if _event_valid_at(raw_data, visit_at)
-    }
-    candidates = []
-    for place in queryset:
-        if place.category == '축제/공연/행사' and place.id not in valid_event_ids:
-            continue
-        if criteria.get('required_indoor_outdoor') and _classification_quality(place)[0] not in {
-            'manual_label', 'inferred_from_description',
-        }:
-            continue
-        distance = _haversine_km(lat, lon, place)
-        if distance <= radius:
-            candidates.append((distance, place))
-    candidates.sort(key=lambda item: (item[0], item[1].id))
-    weather_profiles = _profiles_for_candidates(candidates)
-    if supplement:
-        jobs = _prepare_jobs(candidates, visit_at, now,
-            weather_requested=criteria.get('weather_aware', True) or bool(criteria.get('weather_evidence_required')),
-            crowd_requested=True, weather_profiles=weather_profiles)
-        if _wait_for_running_jobs(jobs):
-            fresh = {place.id: place for place in _visible_places().filter(
-                id__in=[p.id for _, p in candidates]).select_related(
-                'classification_record', 'info', 'weather_exposure_record')}
-            candidates = [(distance, fresh.get(place.id, place)) for distance, place in candidates]
-            weather_profiles = _profiles_for_candidates(candidates)
-
+    if prepared is None:
+        prepared = prepare_recommendations(criteria, now=now, supplement=supplement)
+    elif (prepared.scope != _context_scope(criteria, visit_at)
+          or (prepared.required_indoor_outdoor is not None
+              and prepared.required_indoor_outdoor != criteria.get('required_indoor_outdoor'))):
+        raise ValueError('prepared recommendation scope does not match criteria')
     preferred_categories = [criteria['category']] if criteria.get('category') else (
         user.preferred_categories or [] if user and user.is_authenticated else [])
     preference_source = ('request' if criteria.get('category') else
                          'profile' if preferred_categories else 'default_travel_intent')
-    results = []
-    forecast_cache = {}
-    for distance, place in candidates:
+    forecast_cache = {} if forecast_lookup is not None else prepared.forecasts
+    evaluations = []
+    crowd_can_rank = False
+    weather_can_rank = False
+    indoor_outdoor_can_rank = False
+    for distance, place in prepared.candidates:
+        classification_quality, classification_factor = prepared.classification_qualities[place.id]
+        if criteria.get('required_indoor_outdoor') and (
+            place.indoor_outdoor != criteria['required_indoor_outdoor']
+            or not place.indoor_outdoor_source
+            or classification_quality not in {'manual_label', 'inferred_from_description'}
+        ):
+            continue
         crowd = _crowd(place, visit_at, now)
         if criteria.get('quiet_required') and (
             crowd is None or crowd['is_delayed'] or crowd['level'] != 'relaxed'
         ):
             continue
-        classification_quality, classification_factor = _classification_quality(place)
-        profile = weather_profiles[place.id]
+        profile = prepared.weather_profiles[place.id]
         # Type priors may score weather weakly without claiming an indoor or
         # outdoor label. Nearby places share a forecast grid.
         forecast = None
         if profile.factor:
-            grid = grid_for(place.latitude, place.longitude)
-            if grid not in forecast_cache:
+            grid = prepared.grids[place.id]
+            if forecast_lookup is not None and grid not in forecast_cache:
                 forecast_cache[grid] = forecast_lookup(grid, visit_at, now)
-            forecast = forecast_cache[grid]
+            forecast = forecast_cache.get(grid)
         weather_fit, weather_factors, weather_status = _weather_fit(profile, forecast)
         if criteria.get('weather_evidence_required') and (
             weather_fit is None or profile.source == 'type_prior'
@@ -312,45 +427,36 @@ def recommend(criteria, user=None, *, now=None, supplement=True, forecast_lookup
             'weather': profile.factor,
             'indoor_outdoor': classification_factor,
         }
-        results.append({
-            '_distance_raw': distance, '_raw_scores': raw_scores,
-            '_evidence_factors': evidence_factors, '_weather_factors': weather_factors,
-            'place': {'id': place.id, 'name': place.name, 'category': place.category,
-                      'address': place.address, 'latitude': float(place.latitude),
-                      'longitude': float(place.longitude), 'indoor_outdoor': place.indoor_outdoor,
-                      'indoor_outdoor_source': place.indoor_outdoor_source or None,
-                      'indoor_outdoor_evidence_quality': classification_quality,
-                      'indoor_outdoor_evidence': place.indoor_outdoor_evidence or None,
-                      'weather_exposure': profile.as_dict()},
-            'distance_km': round(distance, 3), 'distance_type': 'straight_line',
-            'travel_time_minutes': None, 'crowd': crowd,
-            'weather_status': weather_status,
-            'weather': ({'source': forecast.source, 'issued_at': forecast.issued_at,
-                         'target_at': forecast.target_at, 'precipitation_type': forecast.precipitation_type,
-                         'temperature_c': forecast.temperature_c, 'wind_mps': forecast.wind_mps,
-                         'completeness': weather_status}
-                        if forecast else None),
-        })
+        crowd_can_rank |= crowd_fit is not None and (
+            criteria['crowd_level'] != 'any' or crowd_fit < NEUTRAL_RANKING_BASELINE
+        )
+        weather_can_rank |= weather_fit is not None
+        indoor_outdoor_can_rank |= raw_scores['indoor_outdoor'] is not None
+        evaluations.append(_CandidateEvaluation(
+            distance=distance,
+            place=place,
+            crowd=crowd,
+            classification_quality=classification_quality,
+            profile=profile,
+            forecast=forecast,
+            weather_fit=weather_fit,
+            weather_factors=weather_factors,
+            weather_status=weather_status,
+            raw_scores=raw_scores,
+            evidence_factors=evidence_factors,
+        ))
     ranking_keys = ['distance', 'category']
-    if any(item['_raw_scores']['crowd'] is not None and (
-        criteria['crowd_level'] != 'any' or item['_raw_scores']['crowd'] < NEUTRAL_RANKING_BASELINE
-    ) for item in results):
+    if crowd_can_rank:
         ranking_keys.append('crowd')
-    if criteria.get('weather_aware', True) and any(
-        item['_raw_scores']['weather'] is not None for item in results
-    ):
+    if criteria.get('weather_aware', True) and weather_can_rank:
         ranking_keys.append('weather')
-    if criteria.get('indoor_outdoor') and any(
-        item['_raw_scores']['indoor_outdoor'] is not None for item in results
-    ):
+    if criteria.get('indoor_outdoor') and indoor_outdoor_can_rank:
         ranking_keys.append('indoor_outdoor')
     weights = settings.RECOMMENDATION_WEIGHTS
     ranking_total = sum(weights[key] for key in ranking_keys)
-    for item in results:
-        raw_scores = item.pop('_raw_scores')
-        factors = item.pop('_evidence_factors')
-        weather_factors = item.pop('_weather_factors')
-        contributors = [key for key in ranking_keys if raw_scores[key] is not None]
+    for evaluation in evaluations:
+        raw_scores = evaluation.raw_scores
+        factors = evaluation.evidence_factors
         effective_scores = {
             key: (NEUTRAL_RANKING_BASELINE + (value - NEUTRAL_RANKING_BASELINE) * factors[key])
             if value is not None else None
@@ -359,52 +465,99 @@ def recommend(criteria, user=None, *, now=None, supplement=True, forecast_lookup
         score = sum(weights[key] * (
             effective_scores[key] if effective_scores[key] is not None else NEUTRAL_RANKING_BASELINE
         ) for key in ranking_keys) / ranking_total
-        guard = 1 / (1 + max(0, item['_distance_raw'] - settings.RECOMMENDATION_DISTANCE_GUARD_FREE_KM)
+        guard = 1 / (1 + max(0, evaluation.distance - settings.RECOMMENDATION_DISTANCE_GUARD_FREE_KM)
                      / settings.RECOMMENDATION_DISTANCE_GUARD_SCALE_KM)
-        adjusted_score = score * guard
-        item['_rank_score'] = adjusted_score
-        item['recommendation_score'] = round(adjusted_score, 2)
-        item['distance_adjustment'] = {'factor': round(guard, 4),
-            'base_score': round(score, 2)}
-        item['score_breakdown'] = {key: round(value, 2) if value is not None else None
-                                   for key, value in raw_scores.items()}
-        item['score_effective_breakdown'] = {key: round(value, 2) if value is not None else None
-                                             for key, value in effective_scores.items()}
-        item['score_contributors'] = contributors
-        item['data_coverage'] = round(sum(weights[key] * factors[key]
-            for key, value in raw_scores.items() if value is not None), 2)
-        item['ranking_coverage'] = round(sum(weights[key] * factors[key]
-            for key in contributors) / ranking_total, 2)
-        item['missing_data'] = [key for key, value in raw_scores.items() if value is None]
-        reasons = [f"현재 위치에서 직선거리 {item['_distance_raw']:.1f}km입니다."]
+        evaluation.rank_score = score * guard
+    crowd_ranking_requested = criteria['crowd_level'] != 'any'
+    evaluations.sort(key=lambda evaluation: (
+        -evaluation.rank_score,
+        -(evaluation.crowd['observed_at'].timestamp()
+          if crowd_ranking_requested and evaluation.crowd else 0),
+        evaluation.distance,
+        evaluation.place.id,
+    ))
+    items = []
+    for rank, evaluation in enumerate(evaluations[:criteria['limit']], 1):
+        raw_scores = evaluation.raw_scores
+        factors = evaluation.evidence_factors
+        effective_scores = {
+            key: (NEUTRAL_RANKING_BASELINE + (value - NEUTRAL_RANKING_BASELINE) * factors[key])
+            if value is not None else None
+            for key, value in raw_scores.items()
+        }
+        contributors = [key for key in ranking_keys if raw_scores[key] is not None]
+        score = sum(weights[key] * (
+            effective_scores[key] if effective_scores[key] is not None else NEUTRAL_RANKING_BASELINE
+        ) for key in ranking_keys) / ranking_total
+        guard = 1 / (1 + max(0, evaluation.distance - settings.RECOMMENDATION_DISTANCE_GUARD_FREE_KM)
+                     / settings.RECOMMENDATION_DISTANCE_GUARD_SCALE_KM)
+        place = evaluation.place
+        profile = evaluation.profile
+        forecast = evaluation.forecast
+        item = {
+            'place': {
+                'id': place.id, 'name': place.name, 'category': place.category,
+                'address': place.address, 'latitude': float(place.latitude),
+                'longitude': float(place.longitude), 'indoor_outdoor': place.indoor_outdoor,
+                'indoor_outdoor_source': place.indoor_outdoor_source or None,
+                'indoor_outdoor_evidence_quality': evaluation.classification_quality,
+                'indoor_outdoor_evidence': place.indoor_outdoor_evidence or None,
+                'weather_exposure': profile.as_dict(),
+            },
+            'distance_km': round(evaluation.distance, 3),
+            'distance_type': 'straight_line',
+            'travel_time_minutes': None,
+            'crowd': evaluation.crowd,
+            'weather_status': evaluation.weather_status,
+            'weather': ({
+                'source': forecast.source, 'issued_at': forecast.issued_at,
+                'target_at': forecast.target_at,
+                'precipitation_type': forecast.precipitation_type,
+                'temperature_c': forecast.temperature_c, 'wind_mps': forecast.wind_mps,
+                'completeness': evaluation.weather_status,
+            } if forecast else None),
+            'recommendation_score': round(evaluation.rank_score, 2),
+            'distance_adjustment': {'factor': round(guard, 4), 'base_score': round(score, 2)},
+            'score_breakdown': {
+                key: round(value, 2) if value is not None else None
+                for key, value in raw_scores.items()
+            },
+            'score_effective_breakdown': {
+                key: round(value, 2) if value is not None else None
+                for key, value in effective_scores.items()
+            },
+            'score_contributors': contributors,
+            'data_coverage': round(sum(
+                weights[key] * factors[key]
+                for key, value in raw_scores.items() if value is not None
+            ), 2),
+            'ranking_coverage': round(sum(
+                weights[key] * factors[key] for key in contributors
+            ) / ranking_total, 2),
+            'missing_data': [key for key, value in raw_scores.items() if value is None],
+            'rank': rank,
+        }
+        reasons = [f"현재 위치에서 직선거리 {evaluation.distance:.1f}km입니다."]
         if preference_source != 'default_travel_intent' and raw_scores['category'] == 100:
             reasons.append('선호한 카테고리입니다.')
         elif preference_source == 'default_travel_intent':
-            reasons.append(DEFAULT_CATEGORY_REASONS[item['place']['category']])
-        crowd = item['crowd']
+            reasons.append(DEFAULT_CATEGORY_REASONS[place.category])
+        crowd = evaluation.crowd
         if crowd:
             reasons.append(f"서울 혼잡도 관측값은 {crowd['level']}입니다.")
             if crowd['is_delayed']:
                 reasons.append('30분 넘은 관측을 낮은 비중으로 반영했습니다.' if 'crowd' in contributors else
                                '30분 넘은 관측이며 순위에는 반영하지 않았습니다.')
         if 'weather' in contributors:
-            if item['weather_status'] == 'partial_hazard':
+            if evaluation.weather_status == 'partial_hazard':
                 reasons.append('예보에서 확인된 악조건만 날씨 점수에 반영했습니다.')
             else:
                 reasons.append('예보된 날씨와 주된 방문 활동의 날씨 노출을 반영했습니다.')
-            reasons.append(item['place']['weather_exposure']['reason'])
-        if weather_factors and item['place']['weather_exposure']['level'] == 'high':
+            reasons.append(profile.reason)
+        if evaluation.weather_factors and profile.level == 'high':
             reasons.append('야외 방문 시 예보된 비·눈, 바람 또는 기온을 확인하세요.')
         item['reasons'] = reasons
-    crowd_ranking_requested = criteria['crowd_level'] != 'any'
-    results.sort(key=lambda item: (-item['_rank_score'],
-        -(item['crowd']['observed_at'].timestamp() if crowd_ranking_requested and item['crowd'] else 0),
-        item['_distance_raw'], item['place']['id']))
-    items = results[:criteria['limit']]
-    for rank, item in enumerate(items, 1):
-        item.pop('_rank_score')
-        item.pop('_distance_raw')
-        item['rank'] = rank
+        items.append(item)
     message = '' if len(items) == criteria['limit'] else (
         '날씨·실내외 근거가 확인된 후보가 요청 개수보다 적습니다.'
         if criteria.get('weather_evidence_required') else
@@ -416,7 +569,7 @@ def recommend(criteria, user=None, *, now=None, supplement=True, forecast_lookup
                      'travel_discovery' if preference_source == 'default_travel_intent' else
                      'requested_preferences')
     return {'items': items, 'generated_at': now, 'visit_at': visit_at,
-            'algorithm_version': ALGORITHM_VERSION, 'candidate_count': len(results),
+            'algorithm_version': ALGORITHM_VERSION, 'candidate_count': len(evaluations),
             'ranking_basis': ranking_basis, 'ranking_factors': ranking_keys,
             'preference_source': preference_source,
             'weather_aware': criteria.get('weather_aware', True),

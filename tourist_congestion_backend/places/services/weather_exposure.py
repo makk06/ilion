@@ -90,12 +90,11 @@ class WeatherExposure:
 def source_codes_for(place_ids):
     """One bounded query for all candidates; never a per-place source lookup."""
     result = {}
-    for place_id, raw in PlaceSource.objects.filter(
+    for place_id, primary_code, legacy_code in PlaceSource.objects.filter(
         place_id__in=place_ids, source=ExternalSource.TOUR_API,
         match_status=PlaceSource.MatchStatus.MATCHED,
-    ).values_list('place_id', 'raw_data'):
-        raw = raw if isinstance(raw, dict) else {}
-        code = str(raw.get('lclsSystm3') or raw.get('lclssystm3') or '').strip()
+    ).values_list('place_id', 'raw_data__lclsSystm3', 'raw_data__lclssystm3'):
+        code = str(primary_code or legacy_code or '').strip()
         result.setdefault(place_id, []).append(code)
     return result
 

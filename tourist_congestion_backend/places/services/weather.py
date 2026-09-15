@@ -163,3 +163,26 @@ def forecast_for(grid, visit_at, now=None):
         issued_at__lte=now,
         issued_at__gte=now - timedelta(hours=settings.WEATHER_MAX_ISSUE_AGE_HOURS),
     ).order_by('-issued_at', '-id').first()
+
+
+def forecasts_for(grids, visit_at, now=None):
+    """Return the same latest forecast as ``forecast_for`` for every grid in one query."""
+    requested = {tuple(grid) for grid in grids if grid is not None}
+    if not requested:
+        return {}
+    now = now or timezone.now()
+    lower = visit_at.replace(minute=0, second=0, microsecond=0)
+    rows = WeatherForecast.objects.filter(
+        source='kma_vilage',
+        grid_x__in={grid[0] for grid in requested},
+        grid_y__in={grid[1] for grid in requested},
+        target_at=lower,
+        issued_at__lte=now,
+        issued_at__gte=now - timedelta(hours=settings.WEATHER_MAX_ISSUE_AGE_HOURS),
+    ).defer('raw_data').order_by('grid_x', 'grid_y', '-issued_at', '-id')
+    result = {}
+    for forecast in rows:
+        grid = (forecast.grid_x, forecast.grid_y)
+        if grid in requested:
+            result.setdefault(grid, forecast)
+    return result

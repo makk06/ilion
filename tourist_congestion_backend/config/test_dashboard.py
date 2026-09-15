@@ -20,7 +20,9 @@ from places.services.description_classification import is_placeholder_descriptio
 from places.services.weather_exposure import exposure_for, source_codes_for, veto_ids_for
 from recommendations.management.commands.evaluate_recommendation_quality import _distance_baseline
 from recommendations.serializers import RecommendationRequestSerializer
-from recommendations.service import _classification_quality, recommend
+from recommendations.service import (
+    _classification_quality, prepare_recommendations, recommend,
+)
 
 
 CITY_PRESETS = (
@@ -133,10 +135,10 @@ def _pack_preview(data, message, elapsed_ms, *, is_distance=False, virtual=False
     }
 
 
-def _model_preview(criteria, now, *, forecast_lookup=None, virtual=False):
+def _model_preview(criteria, now, *, forecast_lookup=None, virtual=False, prepared=None):
     started = perf_counter()
     data, message = recommend(criteria, user=None, now=now, supplement=False,
-                              forecast_lookup=forecast_lookup)
+                              forecast_lookup=forecast_lookup, prepared=prepared)
     return _pack_preview(data, message, round((perf_counter() - started) * 1000), virtual=virtual)
 
 
@@ -221,8 +223,10 @@ def _preview(request, form, now):
         return _model_preview(criteria, now), None, None
     if scenario == 'weather':
         weather_criteria = {**criteria, 'weather_aware': True}
+        prepared = prepare_recommendations(weather_criteria, now=now, supplement=False)
         panels = [{'title': title, 'preview': _model_preview(weather_criteria, now,
-                   forecast_lookup=_virtual_lookup(kind, now), virtual=True)}
+                   forecast_lookup=_virtual_lookup(kind, now), virtual=True,
+                   prepared=prepared)}
                   for kind, title in (('fair', '가상 맑음'), ('rain', '가상 비'), ('wind', '가상 강풍'))]
         experiment = _comparison('날씨만 바꾸면?',
             '입력한 위치·선호·필수 조건과 실제 장소·실내외 분류를 유지하고 예보만 메모리에서 바꿉니다. 날씨 반영은 이 실험에서 켭니다. 실제 기상 예보가 아닙니다.',
@@ -230,7 +234,9 @@ def _preview(request, form, now):
     elif scenario == 'taste':
         taste_base = {**criteria}
         taste_base.pop('category', None)
-        panels = [{'title': title, 'preview': _model_preview({**taste_base, **extra}, now)}
+        prepared = prepare_recommendations(taste_base, now=now, supplement=False)
+        panels = [{'title': title, 'preview': _model_preview(
+            {**taste_base, **extra}, now, prepared=prepared)}
                   for title, extra in (('기본 여행 탐색', {}), ('음식점 선호', {'category': '음식점'}),
                                        ('쇼핑 선호', {'category': '쇼핑'}))]
         experiment = _comparison('선호를 바꾸면?',
@@ -239,7 +245,9 @@ def _preview(request, form, now):
         strict_base = {**criteria, 'crowd_level': 'any', 'weather_evidence_required': False,
                        'quiet_required': False}
         strict_base.pop('required_indoor_outdoor', None)
-        panels = [{'title': title, 'preview': _model_preview({**strict_base, **extra}, now)}
+        prepared = prepare_recommendations(strict_base, now=now, supplement=False)
+        panels = [{'title': title, 'preview': _model_preview(
+            {**strict_base, **extra}, now, prepared=prepared)}
                   for title, extra in (('필수 조건 없음', {}),
                                        ('날씨 근거 필수', {'weather_evidence_required': True}),
                                        ('실내 분류 필수', {'required_indoor_outdoor': 'indoor'}),

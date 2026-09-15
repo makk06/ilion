@@ -12,7 +12,9 @@ from places.integrations.seoul_realtime import SeoulPopulationRecord
 from places.job_models import DataJob
 from places.models import CrowdArea, CrowdData, Place, PlaceCrowdArea, PlaceInfo, WeatherForecast
 from places.services.jobs import _execute, debit, enqueue, run_one
-from places.services.weather import grid_for, latest_available_issue, parse_forecast_page, save_forecast
+from places.services.weather import (
+    forecasts_for, grid_for, latest_available_issue, parse_forecast_page, save_forecast,
+)
 from places.integrations.tour_api import TourAPIPage, normalize_tour_place
 from places.views import _visible_places
 from places.dev_seed_data import TOUR_PLACE_ITEMS
@@ -59,12 +61,29 @@ class RecommendationTests(TestCase):
         self.assertNotIn(unknown.id, ids)
 
     def test_forecast_lookup_is_shared_by_grid_and_skips_unknown_places(self):
-        place('실내 A', 35.16, 129.16, 'indoor')
+        indoor = place('실내 A', 35.16, 129.16, 'indoor')
         place('실내 B', 35.161, 129.161, 'indoor')
         place('미확인', 35.162, 129.162)
-        with patch('recommendations.service.forecast_for', return_value=None) as lookup:
+        with patch('recommendations.service.forecasts_for', return_value={}) as lookup:
             recommend(BASE, now=NOW, supplement=False)
         lookup.assert_called_once()
+        self.assertEqual(set(lookup.call_args.args[0]), {
+            grid_for(indoor.latitude, indoor.longitude),
+        })
+
+    def test_recommendation_batches_forecasts_and_omits_large_detail_fields(self):
+        first = place('첫 실내', 35.16, 129.16, 'indoor')
+        second = place('둘째 실내', 35.20, 129.16, 'indoor')
+        self._forecast(first)
+        self._forecast(second)
+        with CaptureQueriesContext(connection) as queries:
+            recommend(BASE, now=NOW, supplement=False)
+        self.assertLessEqual(len(queries), 5)
+        candidate_sql = next(
+            query['sql'] for query in queries
+            if 'FROM "places_place"' in query['sql']
+        )
+        self.assertNotIn('"places_placeinfo"."raw_data"', candidate_sql)
 
     def test_weather_opt_out_and_required_evidence_are_independent(self):
         outdoor = place('가까운 야외', 35.16, 129.16, 'outdoor')
@@ -393,6 +412,29 @@ class RecommendationTests(TestCase):
 
 
 class WeatherAndJobTests(TestCase):
+    def test_forecasts_for_loads_latest_rows_for_all_grids_in_one_query(self):
+        first_grid = (60, 127)
+        second_grid = (98, 76)
+        older = WeatherForecast.objects.create(
+            grid_x=first_grid[0], grid_y=first_grid[1],
+            issued_at=NOW - timedelta(hours=4), target_at=NOW,
+        )
+        latest = WeatherForecast.objects.create(
+            grid_x=first_grid[0], grid_y=first_grid[1],
+            issued_at=NOW - timedelta(hours=3), target_at=NOW,
+        )
+        other = WeatherForecast.objects.create(
+            grid_x=second_grid[0], grid_y=second_grid[1],
+            issued_at=NOW - timedelta(hours=3), target_at=NOW,
+        )
+        with CaptureQueriesContext(connection) as queries:
+            result = forecasts_for({first_grid, second_grid}, NOW, NOW)
+        self.assertEqual(len(queries), 1)
+        self.assertEqual(result[first_grid].id, latest.id)
+        self.assertEqual(result[second_grid].id, other.id)
+        self.assertNotEqual(result[first_grid].id, older.id)
+        self.assertIn('raw_data', result[first_grid].get_deferred_fields())
+
     def test_issue_selection_respects_release_and_first_target_independently(self):
         utc = dt_timezone.utc
         now = datetime(2026, 9, 13, 5, 20, tzinfo=utc)  # KST 14:20
