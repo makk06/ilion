@@ -80,8 +80,8 @@ python manage.py runserver
 서버가 실행되면 <http://127.0.0.1:8000/healthz>에서 API 응답을 확인할 수 있습니다.
 
 현재 SQLite의 추천을 직접 클릭하며 확인하려면
-<http://127.0.0.1:8000/test/backend/>를 엽니다. 이 페이지는 **개발 중인 추천 MVP 시안**입니다. 공개 시안 릴리스 적용 후에는
-<https://ilion.app.hurdoo.kr/test/backend/>에서도 `DJANGO_DEBUG=false`로 열립니다. 일곱 도시/자유 위치 실제 추천, 같은 장소의
+<http://127.0.0.1:8000/test/backend/>를 엽니다. 이 페이지는 **개발 중인 추천 MVP 시안**입니다. 별도 설치 없이 운영 데이터로 시연하려면
+<https://ilion.app.hurdoo.kr/test/backend/>를 바로 엽니다. 운영에서도 `DJANGO_DEBUG=false`로 제공됩니다. 일곱 도시/자유 위치 실제 추천, 같은 장소의
 가상 맑음·비·강풍, 기본 여행·음식점·쇼핑 선호, 날씨 근거·실내·한산함 필수 조건,
 거리순과 개선 모델을 비교할 수 있습니다. 첫 화면에 실제 추천이 바로 나타납니다.
 가상 날씨는 실제 예보가 아니며 요청 내 메모리에서만 사용합니다. 테스트베드는
