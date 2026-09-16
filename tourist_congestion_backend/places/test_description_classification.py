@@ -4,7 +4,7 @@ from datetime import datetime, timezone as dt_timezone
 from unittest.mock import patch
 
 from django.core.management import call_command
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 import requests
 
@@ -153,6 +153,7 @@ class DescriptionRuleTests(SimpleTestCase):
             scope='principal_place').label, 'mixed')
 
 
+@override_settings(RECOMMENDATION_CONTEXT_CACHE_SECONDS=0)
 class DescriptionPersistenceTests(TestCase):
     def test_rule_reclassifies_name_and_stale_input_becomes_inactive(self):
         p = place('제주교육박물관', 'indoor', 'reviewed_name_rule_v2')
@@ -214,6 +215,7 @@ class DescriptionPersistenceTests(TestCase):
         self.assertEqual(PlaceClassificationEvidence.objects.count(), 1)
 
 
+@override_settings(RECOMMENDATION_CONTEXT_CACHE_SECONDS=0)
 class LunaOfflineTests(TestCase):
     class Response:
         status_code = 200

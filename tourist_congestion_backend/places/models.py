@@ -57,6 +57,11 @@ class Place(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=('latitude', 'longitude')),
+        ]
+
     def __str__(self):
         return self.name
 
@@ -146,6 +151,7 @@ class PlaceSource(models.Model):
         ]
         indexes = [
             models.Index(fields=('source', 'match_status')),
+            models.Index(fields=('place', 'match_status')),
         ]
 
     def __str__(self):

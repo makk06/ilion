@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone as dt_timezone
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
@@ -19,7 +19,9 @@ from places.integrations.tour_api import TourAPIPage, normalize_tour_place
 from places.views import _visible_places
 from places.dev_seed_data import TOUR_PLACE_ITEMS
 from places.job_models import ProviderCallBudget
-from .service import _prepare_jobs, recommend
+from .service import (
+    clear_recommendation_context_cache, _load_candidates, _prepare_jobs, recommend,
+)
 
 
 NOW = datetime(2026, 9, 12, 5, 0, tzinfo=dt_timezone.utc)
@@ -33,6 +35,7 @@ def place(name, lat, lon, indoor='unknown', category='관광지', source=None):
         indoor_outdoor_source=source if source is not None else ('manual' if indoor != 'unknown' else ''))
 
 
+@override_settings(RECOMMENDATION_CONTEXT_CACHE_SECONDS=0)
 class RecommendationTests(TestCase):
     def _forecast(self, place_obj, *, pty=0, temperature=20, wind=2,
                   issued_at=NOW - timedelta(hours=3)):
@@ -78,12 +81,44 @@ class RecommendationTests(TestCase):
         self._forecast(second)
         with CaptureQueriesContext(connection) as queries:
             recommend(BASE, now=NOW, supplement=False)
-        self.assertLessEqual(len(queries), 5)
+        self.assertLessEqual(len(queries), 6)
         candidate_sql = next(
             query['sql'] for query in queries
             if 'FROM "places_place"' in query['sql']
         )
         self.assertNotIn('"places_placeinfo"."raw_data"', candidate_sql)
+        self.assertNotIn('places_crowddata', candidate_sql.lower())
+
+    def test_supplement_enqueues_without_polling_running_jobs(self):
+        place('실내', 35.16, 129.16, 'indoor')
+        running = DataJob(id=999, status=DataJob.Status.RUNNING)
+        with patch('recommendations.service._prepare_jobs', return_value=[running]) as prepare, \
+             CaptureQueriesContext(connection) as queries:
+            response, _ = recommend(BASE, now=NOW, supplement=True)
+        self.assertEqual(len(response['items']), 1)
+        prepare.assert_called_once()
+        self.assertFalse(any('places_datajob' in query['sql'].lower() for query in queries))
+
+    @override_settings(RECOMMENDATION_CONTEXT_CACHE_SECONDS=60)
+    def test_static_context_cache_reuses_candidates_but_refreshes_crowd(self):
+        candidate = place('캐시 후보', 35.16, 129.16)
+        clear_recommendation_context_cache()
+        try:
+            with patch('recommendations.service._load_candidates',
+                       wraps=_load_candidates) as load:
+                first, _ = recommend(BASE, now=NOW, supplement=False)
+                area = CrowdArea.objects.create(source='seoul_realtime', external_id='POI777',
+                                                name='cache-test', last_synced_at=NOW)
+                PlaceCrowdArea.objects.create(place=candidate, crowd_area=area)
+                CrowdData.objects.create(crowd_area=area,
+                                         observed_at=NOW - timedelta(minutes=5),
+                                         crowd_level='relaxed')
+                second, _ = recommend(BASE, now=NOW, supplement=False)
+            self.assertEqual(load.call_count, 1)
+            self.assertIsNone(first['items'][0]['crowd'])
+            self.assertEqual(second['items'][0]['crowd']['level'], 'relaxed')
+        finally:
+            clear_recommendation_context_cache()
 
     def test_weather_opt_out_and_required_evidence_are_independent(self):
         outdoor = place('가까운 야외', 35.16, 129.16, 'outdoor')

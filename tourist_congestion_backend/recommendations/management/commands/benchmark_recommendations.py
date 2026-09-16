@@ -6,13 +6,16 @@ from datetime import datetime
 from statistics import median
 from time import perf_counter
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from places.management.commands.evaluate_pilot import BENCHMARK_CENTERS
-from recommendations.service import prepare_recommendations, recommend
+from recommendations.service import (
+    clear_recommendation_context_cache, prepare_recommendations, recommend,
+)
 
 
 class Command(BaseCommand):
@@ -33,6 +36,7 @@ class Command(BaseCommand):
             raise CommandError('--radius-km must be between 0.1 and 100')
         at = self._request_time(options['at'])
         selected = options['city'] or list(BENCHMARK_CENTERS)
+        clear_recommendation_context_cache()
         results = {}
         for city in selected:
             latitude, longitude = BENCHMARK_CENTERS[city]
@@ -68,6 +72,8 @@ class Command(BaseCommand):
                 'candidate_count': candidate_count,
                 'top_ids': top_ids,
                 'runs_ms': durations,
+                'cold_ms': durations[0],
+                'warm_median_ms': round(median(durations[1:]), 2) if len(durations) > 1 else None,
                 'median_ms': round(median(durations), 2),
                 'p95_ms': ordered[math.ceil(len(ordered) * 0.95) - 1],
                 'preparation_runs_ms': preparation_durations,
@@ -80,6 +86,7 @@ class Command(BaseCommand):
             'runs': runs,
             'provider_calls': 0,
             'database_writes': 0,
+            'context_cache_seconds': settings.RECOMMENDATION_CONTEXT_CACHE_SECONDS,
             'cities': results,
         }, ensure_ascii=False, indent=2))
 

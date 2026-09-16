@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from django.core.management import call_command
 from django.db import connection
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
 from places.models import (
@@ -38,6 +38,7 @@ def venue(name, code, *, label='unknown', source='', category='관광지',
     return place
 
 
+@override_settings(RECOMMENDATION_CONTEXT_CACHE_SECONDS=0)
 class WeatherExposureTests(TestCase):
     def test_verified_type_is_weak_weather_prior_not_indoor_label(self):
         palace = venue('고궁', 'HS010100')

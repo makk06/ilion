@@ -1,15 +1,17 @@
-import time
+from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from threading import Lock
+from time import monotonic
 
 from django.conf import settings
+from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
-from places.models import Place, PlaceCrowdArea, PlaceInfo
-from places.views import _haversine_km, _nearby_bounding_box, _visible_places
+from places.models import CrowdData, Place, PlaceCrowdArea, PlaceInfo, PlaceSource
+from places.views import _haversine_km, _nearby_bounding_box
 from places.services.weather import forecast_for, forecasts_for, grid_for, latest_available_issue
 from places.services.jobs import enqueue
-from places.job_models import DataJob
 from places.services.weather import KST
 from places.services.classification import current_description_evidence, name_decision
 from places.services.weather_exposure import (
@@ -76,6 +78,15 @@ class PreparedRecommendations:
     weather_profiles: dict
     grids: dict
     forecasts: dict
+    crowds: dict
+
+
+@dataclass(slots=True)
+class _CandidateContext:
+    candidates: list
+    classification_qualities: dict
+    weather_profiles: dict
+    grids: dict
 
 
 @dataclass(slots=True)
@@ -92,6 +103,12 @@ class _CandidateEvaluation:
     raw_scores: dict
     evidence_factors: dict
     rank_score: float = 0
+
+
+_CONTEXT_CACHE = OrderedDict()
+_CONTEXT_CACHE_LOCK = Lock()
+_CONTEXT_BUILD_LOCKS = {}
+_CONTEXT_CACHE_MAX_ENTRIES = 4
 
 
 def _event_valid_at(raw_data, visit_at):
@@ -171,27 +188,37 @@ def _weather_fit(profile, forecast):
 
 
 def _profiles_for_candidates(candidates):
-    ids = [place.id for _, place in candidates]
-    codes = source_codes_for(ids)
-    veto_ids = veto_ids_for(ids)
+    if not candidates:
+        return {}
+    latitudes = [place.latitude for _, place in candidates]
+    longitudes = [place.longitude for _, place in candidates]
+    bounds = (min(latitudes), max(latitudes), min(longitudes), max(longitudes))
+    codes = source_codes_for(bounds=bounds)
+    veto_ids = veto_ids_for(bounds=bounds)
+    # The digest only validates stored offline profiles. Most catalog places
+    # have no stored profile, so hashing their descriptions on every request
+    # does not affect ranking or the public response.
     return {place.id: exposure_for(place, codes.get(place.id, ()),
-                                   veto=place.id in veto_ids)
+                                   veto=place.id in veto_ids, compute_digest=False)
             for _, place in candidates}
 
 
-def _crowd(place, visit_at, now):
-    observed = place.latest_crowd_observed_at
+def _crowd(observation, visit_at, now):
+    if observation is None:
+        return None
+    observed = observation['observed_at']
     # Current observation is evidence only for a visit effectively now.
     if observed is None or abs((visit_at - now).total_seconds()) > 300:
         return None
     age = (now - observed).total_seconds()
-    if age < 0 or age > settings.CROWD_MAX_AGE_MINUTES * 60 or place.latest_crowd_level not in CROWD_FIT['any']:
+    level = observation['crowd_level']
+    if age < 0 or age > settings.CROWD_MAX_AGE_MINUTES * 60 or level not in CROWD_FIT['any']:
         return None
     is_delayed = age > settings.CROWD_FULL_WEIGHT_MINUTES * 60
     return {
         'type': 'delayed_observation' if is_delayed else 'realtime',
-        'level': place.latest_crowd_level,
-        'source': place.latest_crowd_source, 'observed_at': observed,
+        'level': level,
+        'source': observation['crowd_area__source'], 'observed_at': observed,
         'is_stale': age > settings.CROWD_FRESH_MINUTES * 60,
         'is_delayed': is_delayed,
         'score_weight_factor': settings.CROWD_DELAYED_WEIGHT_FACTOR if is_delayed else 1.0,
@@ -212,11 +239,21 @@ def _with_candidate_data(queryset):
     ).only(*_CANDIDATE_FIELDS)
 
 
+def _recommendable_places():
+    """Apply source visibility without hydrating per-place crowd subqueries."""
+    sources = PlaceSource.objects.filter(place_id=OuterRef('pk'))
+    active_sources = sources.filter(match_status=PlaceSource.MatchStatus.MATCHED)
+    return Place.objects.alias(
+        _has_any_source=Exists(sources),
+        _has_active_source=Exists(active_sources),
+    ).filter(Q(_has_any_source=False) | Q(_has_active_source=True)).order_by()
+
+
 def _load_candidates(criteria, visit_at):
     lat, lon = criteria['latitude'], criteria['longitude']
     radius = criteria['radius_km']
     lat_min, lat_max, lon_min, lon_max = _nearby_bounding_box(lat, lon, radius)
-    queryset = _visible_places().filter(
+    queryset = _recommendable_places().filter(
         category__in=MVP_CATEGORIES,
         latitude__gte=lat_min, latitude__lte=lat_max,
         longitude__gte=lon_min, longitude__lte=lon_max,
@@ -253,36 +290,124 @@ def _load_candidates(criteria, visit_at):
     return candidates, classification_qualities
 
 
+def _crowds_for_candidates(candidates, visit_at, now):
+    """Load the latest observation for every mapped candidate in one query."""
+    if abs((visit_at - now).total_seconds()) > 300:
+        return {}
+    place_ids = [place.id for _, place in candidates]
+    if not place_ids:
+        return {}
+    rows = CrowdData.objects.filter(
+        crowd_area__place_mappings__place_id__in=place_ids,
+    ).order_by(
+        'crowd_area__place_mappings__place_id', '-observed_at', '-id',
+    ).values(
+        'crowd_area__place_mappings__place_id',
+        'crowd_area__source',
+        'observed_at',
+        'crowd_level',
+    )
+    crowds = {}
+    seen = set()
+    for row in rows:
+        place_id = row['crowd_area__place_mappings__place_id']
+        if place_id in seen:
+            continue
+        seen.add(place_id)
+        crowd = _crowd(row, visit_at, now)
+        if crowd is not None:
+            crowds[place_id] = crowd
+    return crowds
+
+
+def clear_recommendation_context_cache():
+    """Clear process-local static candidate contexts after controlled updates/tests."""
+    with _CONTEXT_CACHE_LOCK:
+        _CONTEXT_CACHE.clear()
+        _CONTEXT_BUILD_LOCKS.clear()
+
+
+def _candidate_context_key(criteria, visit_at):
+    return (
+        float(criteria['latitude']),
+        float(criteria['longitude']),
+        float(criteria['radius_km']),
+        visit_at.astimezone(KST).date().isoformat(),
+        tuple(sorted(criteria.get('required_categories') or ())),
+        criteria.get('required_indoor_outdoor') or '',
+    )
+
+
+def _build_candidate_context(criteria, visit_at):
+    candidates, classification_qualities = _load_candidates(criteria, visit_at)
+    weather_profiles = _profiles_for_candidates(candidates)
+    for _, place in candidates:
+        classification_qualities.setdefault(place.id, _classification_quality(place))
+    grids = {
+        place.id: grid_for(place.latitude, place.longitude)
+        if weather_profiles[place.id].factor else None
+        for _, place in candidates
+    }
+    return _CandidateContext(
+        candidates=candidates,
+        classification_qualities=classification_qualities,
+        weather_profiles=weather_profiles,
+        grids=grids,
+    )
+
+
+def _candidate_context(criteria, visit_at):
+    timeout = settings.RECOMMENDATION_CONTEXT_CACHE_SECONDS
+    if timeout <= 0:
+        return _build_candidate_context(criteria, visit_at)
+    key = _candidate_context_key(criteria, visit_at)
+    now_monotonic = monotonic()
+    with _CONTEXT_CACHE_LOCK:
+        cached = _CONTEXT_CACHE.get(key)
+        if cached and now_monotonic - cached[0] < timeout:
+            _CONTEXT_CACHE.move_to_end(key)
+            return cached[1]
+        if cached:
+            del _CONTEXT_CACHE[key]
+        build_lock = _CONTEXT_BUILD_LOCKS.setdefault(key, Lock())
+    # Prevent identical cold requests from multiplying the expensive catalog
+    # work. Different locations build independently.
+    with build_lock:
+        now_monotonic = monotonic()
+        with _CONTEXT_CACHE_LOCK:
+            cached = _CONTEXT_CACHE.get(key)
+            if cached and now_monotonic - cached[0] < timeout:
+                _CONTEXT_CACHE.move_to_end(key)
+                return cached[1]
+        context = _build_candidate_context(criteria, visit_at)
+        with _CONTEXT_CACHE_LOCK:
+            _CONTEXT_CACHE[key] = (monotonic(), context)
+            _CONTEXT_CACHE.move_to_end(key)
+            while len(_CONTEXT_CACHE) > _CONTEXT_CACHE_MAX_ENTRIES:
+                expired_key, _ = _CONTEXT_CACHE.popitem(last=False)
+                _CONTEXT_BUILD_LOCKS.pop(expired_key, None)
+        return context
+
+
 def prepare_recommendations(criteria, *, now=None, supplement=True):
     """Hydrate request-invariant recommendation inputs once for one or more rankings."""
     now = now or timezone.now()
     visit_at = criteria.get('visit_at') or now
-    candidates, classification_qualities = _load_candidates(criteria, visit_at)
-    weather_profiles = _profiles_for_candidates(candidates)
+    context = _candidate_context(criteria, visit_at)
+    candidates = context.candidates
+    classification_qualities = context.classification_qualities
+    weather_profiles = context.weather_profiles
+    crowds = _crowds_for_candidates(candidates, visit_at, now)
     if supplement:
-        jobs = _prepare_jobs(
+        _prepare_jobs(
             candidates, visit_at, now,
             weather_requested=(criteria.get('weather_aware', True)
                                or bool(criteria.get('weather_evidence_required'))),
             crowd_requested=True,
             weather_profiles=weather_profiles,
+            crowds=crowds,
         )
-        if _wait_for_running_jobs(jobs):
-            refreshed = {
-                place.id: place for place in _with_candidate_data(
-                    _visible_places().filter(id__in=[place.id for _, place in candidates])
-                )
-            }
-            candidates = [(distance, refreshed.get(place.id, place))
-                          for distance, place in candidates]
-            classification_qualities = {}
-            weather_profiles = _profiles_for_candidates(candidates)
-    for _, place in candidates:
-        classification_qualities.setdefault(place.id, _classification_quality(place))
-    grids = {
-        place.id: grid_for(place.latitude, place.longitude) if weather_profiles[place.id].factor else None
-        for _, place in candidates
-    }
+    grids = context.grids
     return PreparedRecommendations(
         now=now,
         visit_at=visit_at,
@@ -295,11 +420,12 @@ def prepare_recommendations(criteria, *, now=None, supplement=True):
         forecasts=forecasts_for(
             {grid for grid in grids.values() if grid is not None}, visit_at, now,
         ),
+        crowds=crowds,
     )
 
 
 def _prepare_jobs(candidates, visit_at, now, *, weather_requested=False,
-                  crowd_requested=False, weather_profiles=None):
+                  crowd_requested=False, weather_profiles=None, crowds=None):
     if weather_requested and weather_profiles is None:
         hydrated = Place.objects.filter(id__in=[place.id for _, place in candidates]).select_related(
             'info', 'classification_record', 'weather_exposure_record').in_bulk()
@@ -318,9 +444,11 @@ def _prepare_jobs(candidates, visit_at, now, *, weather_requested=False,
         mappings = PlaceCrowdArea.objects.filter(
             place_id__in=[place.id for _, place in candidates[:100]],
             crowd_area__source='seoul_realtime',
-        ).select_related('crowd_area').order_by('place_id', 'id')
-        for mapping in mappings:
-            mapped_areas.setdefault(mapping.place_id, mapping.crowd_area.external_id)
+        ).order_by('place_id', 'id').values_list('place_id', 'crowd_area__external_id')
+        for place_id, external_id in mappings:
+            mapped_areas.setdefault(place_id, external_id)
+        if crowds is None:
+            crowds = _crowds_for_candidates(candidates, visit_at, now)
     # Candidate rows are already in memory. Unknown venues cannot starve a
     # classified venue beyond an arbitrary distance-rank cutoff.
     for index, (_, place) in enumerate(candidates):
@@ -339,25 +467,13 @@ def _prepare_jobs(candidates, visit_at, now, *, weather_requested=False,
                                  'target_at': visit_at.isoformat()}, lane='supplemental',
                         window=issue.strftime('%Y%m%d%H')))
         if crowd_requested and index < 100:
-            area_id = place.latest_crowd_area_external_id or mapped_areas.get(place.id)
+            area_id = mapped_areas.get(place.id)
             if area_id and area_id not in seen_areas:
                 seen_areas.add(area_id)
-                if _crowd(place, visit_at, now) is None and abs((visit_at - now).total_seconds()) <= 300:
+                if not crowds.get(place.id) and abs((visit_at - now).total_seconds()) <= 300:
                     pending.append(enqueue('seoul_crowd', area_id,
                         lane='supplemental', window=now.strftime('%Y%m%d%H') + str(now.minute // 5)))
     return pending
-
-
-def _wait_for_running_jobs(jobs):
-    active_ids = [job.id for job in jobs if job.status == DataJob.Status.RUNNING]
-    if not active_ids:
-        return False
-    deadline = time.monotonic() + 2
-    while time.monotonic() < deadline:
-        if not DataJob.objects.filter(id__in=active_ids, status=DataJob.Status.RUNNING).exists():
-            return True
-        time.sleep(min(.1, max(0, deadline - time.monotonic())))
-    return False
 
 
 def recommend(criteria, user=None, *, now=None, supplement=True, forecast_lookup=None,
@@ -387,7 +503,7 @@ def recommend(criteria, user=None, *, now=None, supplement=True, forecast_lookup
             or classification_quality not in {'manual_label', 'inferred_from_description'}
         ):
             continue
-        crowd = _crowd(place, visit_at, now)
+        crowd = prepared.crowds.get(place.id)
         if criteria.get('quiet_required') and (
             crowd is None or crowd['is_delayed'] or crowd['level'] != 'relaxed'
         ):

@@ -25,6 +25,7 @@ class HealthzTests(TestCase):
         self.assertEqual(response.status_code, 405)
 
 
+@override_settings(RECOMMENDATION_CONTEXT_CACHE_SECONDS=0)
 class BackendTestDashboardTests(TestCase):
     url = '/test/backend/'
 

@@ -87,13 +87,24 @@ class WeatherExposure:
                 'persisted': self.persisted}
 
 
-def source_codes_for(place_ids):
+def source_codes_for(place_ids=None, *, bounds=None):
     """One bounded query for all candidates; never a per-place source lookup."""
     result = {}
-    for place_id, primary_code, legacy_code in PlaceSource.objects.filter(
-        place_id__in=place_ids, source=ExternalSource.TOUR_API,
+    queryset = PlaceSource.objects.filter(
+        source=ExternalSource.TOUR_API,
         match_status=PlaceSource.MatchStatus.MATCHED,
-    ).values_list('place_id', 'raw_data__lclsSystm3', 'raw_data__lclssystm3'):
+    )
+    if bounds is not None:
+        lat_min, lat_max, lon_min, lon_max = bounds
+        queryset = queryset.filter(
+            place__latitude__gte=lat_min, place__latitude__lte=lat_max,
+            place__longitude__gte=lon_min, place__longitude__lte=lon_max,
+        )
+    else:
+        queryset = queryset.filter(place_id__in=place_ids or ())
+    for place_id, primary_code, legacy_code in queryset.values_list(
+        'place_id', 'raw_data__lclsSystm3', 'raw_data__lclssystm3',
+    ):
         code = str(primary_code or legacy_code or '').strip()
         result.setdefault(place_id, []).append(code)
     return result
@@ -158,9 +169,9 @@ def _digest(place, codes, veto):
         separators=(',', ':')).encode('utf-8')).hexdigest()
 
 
-def derive_exposure(place, codes=(), *, veto=False):
+def derive_exposure(place, codes=(), *, veto=False, compute_digest=True):
     """No writes. Type is a low-weight prior; explicit current evidence wins."""
-    digest = _digest(place, codes, veto)
+    digest = _digest(place, codes, veto) if compute_digest else ''
     explicit = _compatible_exposure(place)
     if veto and (not explicit or explicit[1] != 'manual'):
         return WeatherExposure(source='audit_veto',
@@ -219,22 +230,29 @@ def derive_exposure(place, codes=(), *, veto=False):
     return WeatherExposure(type_code=code, input_hash=digest)
 
 
-def veto_ids_for(place_ids):
-    return set(PlaceClassificationAttempt.objects.filter(
-        place_id__in=place_ids, status='review_after_audit',
-    ).values_list('place_id', flat=True))
+def veto_ids_for(place_ids=None, *, bounds=None):
+    queryset = PlaceClassificationAttempt.objects.filter(status='review_after_audit')
+    if bounds is not None:
+        lat_min, lat_max, lon_min, lon_max = bounds
+        queryset = queryset.filter(
+            place__latitude__gte=lat_min, place__latitude__lte=lat_max,
+            place__longitude__gte=lon_min, place__longitude__lte=lon_max,
+        )
+    else:
+        queryset = queryset.filter(place_id__in=place_ids or ())
+    return set(queryset.values_list('place_id', flat=True))
 
 
-def exposure_for(place, codes=(), *, veto=False):
-    profile = derive_exposure(place, codes, veto=veto)
+def exposure_for(place, codes=(), *, veto=False, compute_digest=True):
     try:
         stored = place.weather_exposure_record
     except AttributeError:
-        return profile
+        return derive_exposure(place, codes, veto=veto, compute_digest=compute_digest)
     if stored.source == 'manual':
         return WeatherExposure(stored.level, stored.activity, 'manual', stored.reason,
             stored.conflict, stored.conflict_reason, stored.type_code,
             stored.type_name, 1.0, stored.input_hash, True)
+    profile = derive_exposure(place, codes, veto=veto)
     if stored.input_hash == profile.input_hash and stored.version == POLICY_VERSION:
         return replace(profile, persisted=True)
     return profile
