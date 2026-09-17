@@ -1,3 +1,5 @@
+import uuid
+
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -27,6 +29,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     status = models.CharField(max_length=10, choices=Status, default=Status.ACTIVE)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # 탈퇴 유예 관리. status가 withdrawn일 때만 값이 있고, 철회 시 둘 다 None으로 되돌린다.
+    purge_at = models.DateTimeField(null=True, blank=True)
+    withdrawal_reason_code = models.CharField(max_length=30, null=True, blank=True)
 
     is_staff = models.BooleanField(default=False)
 
@@ -163,3 +169,45 @@ class Feedback(models.Model):
 
     def __str__(self):
         return f'user {self.user_id} {self.feedback_type} feedback on place {self.place_id}'
+
+
+class AnonymousActor(models.Model):
+    """탈퇴자의 행동 데이터를 묶는 익명 주체.
+
+    식별 컬럼도 시각 컬럼도 두지 않는다. 원래 user_id와의 매핑을 저장하는 장소가
+    존재하지 않으므로 복원이 구조적으로 불가능하다. 여기에 created_at을 추가하면
+    WithdrawnEmailHash와 생성 시각으로 짝지어져 익명화가 무효가 된다.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    def __str__(self):
+        return f'anonymous actor {self.id}'
+
+
+class WithdrawnEmailHash(models.Model):
+    """재가입 악용 방지용. 30일간 같은 이메일의 재가입을 막는다.
+
+    expires_at이 DateField인 것은 의도적이다. 같은 날 탈퇴한 사람들이 동일한 값을
+    갖게 해서 AnonymousActor와 1:1로 짝지어지지 않게 한다.
+    """
+
+    email_hash = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateField(db_index=True)
+
+    def __str__(self):
+        return f'withdrawn email hash expiring {self.expires_at}'
+
+
+class WithdrawalReason(models.Model):
+    """탈퇴 사유 집계. 어떤 개인·actor와도 연결되지 않는다.
+
+    자유 입력을 받지 않는다. 자유 텍스트를 허용하면 본인을 식별할 수 있는 내용이
+    들어와 익명성이 깨진다.
+    """
+
+    reason_code = models.CharField(max_length=30)
+    withdrawn_on = models.DateField()
+
+    def __str__(self):
+        return f'{self.reason_code} on {self.withdrawn_on}'
