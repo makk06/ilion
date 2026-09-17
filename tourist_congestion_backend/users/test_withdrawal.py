@@ -434,3 +434,106 @@ class WithdrawCancelTests(TestCase):
         response = self.client.post(reverse('withdraw-cancel'),
                                     {'email': 'leaver@example.com', 'password': 'pw12345678'})
         self.assertEqual(response.status_code, 401)
+
+
+class RejoinBlockTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def _block(self, email, days=30):
+        WithdrawnEmailHash.objects.create(
+            email_hash=hash_email_for_withdrawal(email),
+            expires_at=timezone.now().date() + timedelta(days=days),
+        )
+
+    def _signup(self, email):
+        return self.client.post(reverse('auth-signup'), {
+            'email': email, 'password': 'pw12345678', 'nickname': '재가입자',
+        })
+
+    def test_recently_withdrawn_email_cannot_sign_up(self):
+        self._block('leaver@example.com')
+        self.assertEqual(self._signup('leaver@example.com').status_code, 400)
+        self.assertFalse(User.objects.filter(email='leaver@example.com').exists())
+
+    def test_block_ignores_case(self):
+        self._block('leaver@example.com')
+        self.assertEqual(self._signup('Leaver@Example.com').status_code, 400)
+
+    def test_expired_block_allows_sign_up(self):
+        WithdrawnEmailHash.objects.create(
+            email_hash=hash_email_for_withdrawal('leaver@example.com'),
+            expires_at=timezone.now().date() - timedelta(days=1),
+        )
+        self.assertEqual(self._signup('leaver@example.com').status_code, 201)
+
+    def test_rejection_does_not_reveal_that_the_account_was_withdrawn(self):
+        self._block('leaver@example.com')
+        body = self._signup('leaver@example.com').content.decode()
+        for leak in ('탈퇴', '30일', 'withdraw'):
+            self.assertNotIn(leak, body)
+
+    def test_unrelated_email_is_unaffected(self):
+        self._block('leaver@example.com')
+        self.assertEqual(self._signup('newcomer@example.com').status_code, 201)
+
+
+ANONYMOUS_AUTHOR_NAME = '탈퇴한 사용자'
+
+
+class AnonymisedReviewResponseTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.place = create_place()
+        self.leaver = User.objects.create_user(
+            email='leaver@example.com', password='pw12345678', nickname='떠나는사람')
+        self.review = Review.objects.create(user=self.leaver, place=self.place,
+                                            text='좋았습니다', rating=5)
+        self.leaver.status = User.Status.WITHDRAWN
+        self.leaver.purge_at = timezone.now() - timedelta(seconds=1)
+        self.leaver.save(update_fields=['status', 'purge_at', 'updated_at'])
+        purge_withdrawn_users()
+
+    def _fetch(self):
+        response = self.client.get(reverse('reviews'), {'place_id': self.place.pk})
+        self.assertEqual(response.status_code, 200)
+        return response.json()['data']['items'][0]
+
+    def test_author_is_shown_as_withdrawn(self):
+        item = self._fetch()
+        self.assertIsNone(item['author_id'])
+        self.assertEqual(item['author_nickname'], ANONYMOUS_AUTHOR_NAME)
+
+    def test_anonymous_visitor_does_not_own_the_review(self):
+        # request.user.id도 None, item.user_id도 None이라 == 비교가 참이 된다.
+        # 이 버그가 살아 있으면 비로그인 방문자에게 수정·삭제 UI가 노출된다.
+        item = self._fetch()
+        self.assertFalse(item['is_mine'])
+
+    def test_signed_in_visitor_does_not_own_the_review(self):
+        other = User.objects.create_user(
+            email='other@example.com', password='pw12345678', nickname='다른사람')
+        self.client.force_authenticate(user=other)
+        self.assertFalse(self._fetch()['is_mine'])
+
+
+class NotificationTests(TestCase):
+    def test_anonymised_likes_are_not_listed(self):
+        client = APIClient()
+        place = create_place()
+        author = User.objects.create_user(
+            email='author@example.com', password='pw12345678', nickname='작성자')
+        liker = User.objects.create_user(
+            email='liker@example.com', password='pw12345678', nickname='좋아요한사람')
+        review = Review.objects.create(user=author, place=place, text='글', rating=4)
+        ReviewLike.objects.create(user=liker, review=review)
+
+        liker.status = User.Status.WITHDRAWN
+        liker.purge_at = timezone.now() - timedelta(seconds=1)
+        liker.save(update_fields=['status', 'purge_at', 'updated_at'])
+        purge_withdrawn_users()
+
+        client.force_authenticate(user=author)
+        response = client.get(reverse('notifications'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['data']['items'], [])

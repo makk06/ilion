@@ -2,7 +2,12 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
+from django.utils import timezone
+
 from places.models import Place
+
+from .models import WithdrawnEmailHash
+from .utils import hash_email_for_withdrawal
 
 from .models import Feedback, User
 
@@ -13,6 +18,16 @@ class SignupSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['email', 'password', 'nickname']
+
+    def validate_email(self, value):
+        blocked = WithdrawnEmailHash.objects.filter(
+            email_hash=hash_email_for_withdrawal(value),
+            expires_at__gte=timezone.now().date(),
+        ).exists()
+        if blocked:
+            # 탈퇴 사실을 밝히지 않는다. 밝히면 남의 이메일로 탈퇴 여부를 캐낼 수 있다.
+            raise serializers.ValidationError('지금은 이 이메일로 가입할 수 없습니다.')
+        return value
 
     def validate_nickname(self, value):
         if User.objects.filter(nickname=value).exists():
