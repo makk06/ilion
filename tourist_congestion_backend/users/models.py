@@ -3,6 +3,7 @@ import uuid
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import Q
 
 from places.models import Place
 
@@ -60,35 +61,64 @@ class RefreshToken(models.Model):
 
 
 class Favorite(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='favorites')
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='favorites')
+    actor = models.ForeignKey('AnonymousActor', on_delete=models.CASCADE, null=True, blank=True,
+                              related_name='favorites')
     place = models.ForeignKey(Place, on_delete=models.CASCADE, related_name='favorited_by')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=['user', 'place'], name='unique_user_place_favorite'),
+            models.UniqueConstraint(fields=['actor', 'place'], name='unique_actor_place_favorite'),
+            models.CheckConstraint(
+                condition=(Q(user__isnull=False) & Q(actor__isnull=True))
+                          | (Q(user__isnull=True) & Q(actor__isnull=False)),
+                name='favorite_user_xor_actor',
+            ),
         ]
 
     def __str__(self):
-        return f'user {self.user_id} favorite of place {self.place_id}'
+        return f'favorite of place {self.place_id}'
 
 
 class Review(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    actor = models.ForeignKey('AnonymousActor', on_delete=models.CASCADE, null=True, blank=True,
+                              related_name='reviews')
     place = models.ForeignKey(Place, on_delete=models.CASCADE)
     text = models.TextField(max_length=3000)
     rating = models.PositiveSmallIntegerField(default=5)
     photo = models.ImageField(upload_to='reviews/%Y/%m/', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(Q(user__isnull=False) & Q(actor__isnull=True))
+                          | (Q(user__isnull=True) & Q(actor__isnull=False)),
+                name='review_user_xor_actor',
+            ),
+        ]
+
 
 class ReviewLike(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    actor = models.ForeignKey('AnonymousActor', on_delete=models.CASCADE, null=True, blank=True,
+                              related_name='review_likes')
     review = models.ForeignKey(Review, on_delete=models.CASCADE, related_name='likes')
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=['user', 'review'], name='unique_review_like')]
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'review'], name='unique_review_like'),
+            models.UniqueConstraint(fields=['actor', 'review'], name='unique_actor_review_like'),
+            models.CheckConstraint(
+                condition=(Q(user__isnull=False) & Q(actor__isnull=True))
+                          | (Q(user__isnull=True) & Q(actor__isnull=False)),
+                name='reviewlike_user_xor_actor',
+            ),
+        ]
 
 
 class PointEntry(models.Model):
@@ -124,12 +154,22 @@ class CompanionMember(models.Model):
 
 
 class RecentPlace(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    actor = models.ForeignKey('AnonymousActor', on_delete=models.CASCADE, null=True, blank=True,
+                              related_name='recent_places')
     place = models.ForeignKey(Place, on_delete=models.CASCADE)
     viewed_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=['user', 'place'], name='unique_recent_place')]
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'place'], name='unique_recent_place'),
+            models.UniqueConstraint(fields=['actor', 'place'], name='unique_actor_recent_place'),
+            models.CheckConstraint(
+                condition=(Q(user__isnull=False) & Q(actor__isnull=True))
+                          | (Q(user__isnull=True) & Q(actor__isnull=False)),
+                name='recentplace_user_xor_actor',
+            ),
+        ]
 
 
 class Plan(models.Model):
@@ -156,7 +196,9 @@ class Feedback(models.Model):
         RECOMMENDATION = 'recommendation', 'Recommendation'
         PLACE = 'place', 'Place'
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='feedbacks')
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='feedbacks')
+    actor = models.ForeignKey('AnonymousActor', on_delete=models.CASCADE, null=True, blank=True,
+                              related_name='feedbacks')
     place = models.ForeignKey(Place, on_delete=models.CASCADE, related_name='feedbacks')
     feedback_type = models.CharField(max_length=14, choices=FeedbackType)
     value = models.PositiveSmallIntegerField(
@@ -167,8 +209,17 @@ class Feedback(models.Model):
     memo = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(Q(user__isnull=False) & Q(actor__isnull=True))
+                          | (Q(user__isnull=True) & Q(actor__isnull=False)),
+                name='feedback_user_xor_actor',
+            ),
+        ]
+
     def __str__(self):
-        return f'user {self.user_id} {self.feedback_type} feedback on place {self.place_id}'
+        return f'{self.feedback_type} feedback on place {self.place_id}'
 
 
 class AnonymousActor(models.Model):

@@ -1,8 +1,26 @@
 from datetime import date
 
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 
-from .models import AnonymousActor, User, WithdrawalReason, WithdrawnEmailHash
+from places.models import Place
+
+from .models import (AnonymousActor, Favorite, Feedback, RecentPlace, Review, ReviewLike,
+                     User, WithdrawalReason, WithdrawnEmailHash)
+
+
+def create_place(**overrides):
+    fields = {
+        'name': '테스트 장소',
+        'category': '관광지',
+        'region_code': '11000',
+        'address': '서울 어딘가',
+        'latitude': '37.5665',
+        'longitude': '126.9780',
+        'indoor_outdoor': Place.IndoorOutdoor.OUTDOOR,
+    }
+    fields.update(overrides)
+    return Place.objects.create(**fields)
 
 
 class AnonymousActorTests(TestCase):
@@ -37,3 +55,43 @@ class UserWithdrawalFieldTests(TestCase):
         user = User.objects.create_user(email='a@example.com', password='pw12345678', nickname='가입자')
         self.assertIsNone(user.purge_at)
         self.assertIsNone(user.withdrawal_reason_code)
+
+
+class UserXorActorConstraintTests(TestCase):
+    def setUp(self):
+        self.place = create_place()
+        self.user = User.objects.create_user(
+            email='keeper@example.com', password='pw12345678', nickname='보존자')
+        self.actor = AnonymousActor.objects.create()
+
+    def test_row_may_belong_to_a_user(self):
+        favorite = Favorite.objects.create(user=self.user, place=self.place)
+        self.assertIsNone(favorite.actor)
+
+    def test_row_may_belong_to_an_actor(self):
+        favorite = Favorite.objects.create(actor=self.actor, place=self.place)
+        self.assertIsNone(favorite.user)
+
+    def test_row_may_not_belong_to_both(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Favorite.objects.create(user=self.user, actor=self.actor, place=self.place)
+
+    def test_row_may_not_be_orphaned(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Favorite.objects.create(place=self.place)
+
+    def test_every_preserved_model_enforces_the_rule(self):
+        for model in (Feedback, Review, ReviewLike, Favorite, RecentPlace):
+            names = {constraint.name for constraint in model._meta.constraints}
+            self.assertIn(
+                f'{model.__name__.lower()}_user_xor_actor', names,
+                f'{model.__name__}에 XOR 제약이 없습니다',
+            )
+
+    def test_actor_may_not_favorite_the_same_place_twice(self):
+        Favorite.objects.create(actor=self.actor, place=self.place)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Favorite.objects.create(actor=self.actor, place=self.place)
