@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from .crowd_confidence import clip, confidence, freshness
 
 KST = ZoneInfo('Asia/Seoul')
-MODEL_VERSION = 'heuristic-v1.1'
+MODEL_VERSION = 'heuristic-v1.2'
 LEVELS = ('VERY_LOW', 'LOW', 'NORMAL', 'HIGH', 'VERY_HIGH')
 LABELS = ('매우 여유', '여유', '보통', '혼잡', '매우 혼잡')
 ANCHORS = {'relaxed': 15, 'normal': 45, 'busy': 70, 'crowded': 90}
@@ -83,6 +83,8 @@ def event_effect(events, lat, lon, at):
         if event['external_id'] in seen or not event.get('active', True):
             continue
         seen.add(event['external_id'])
+        if event.get('source') == 'manual' or event.get('latitude') is None or event.get('longitude') is None:
+            continue
         d = distance_m(lat, lon, event['latitude'], event['longitude'])
         if d > 2000:
             continue
@@ -99,25 +101,66 @@ def event_effect(events, lat, lon, at):
 
 
 def weather_effect(profile, indoor_outdoor, values):
-    if not values or 'temperature' not in values or 'precipitation_type' not in values:
+    if weather_value_reason(profile, indoor_outdoor, values):
         return 0.0, 0.0
     temp = values['temperature']
     rain = float(values['precipitation_type'] != 0 or values.get('precipitation_mm', 0) > 0)
     hot, cold = clip((temp-28)/7), clip((5-temp)/10)
-    wind = clip((values.get('wind_speed', 0)-8)/7)
     if profile == 'shopping' and indoor_outdoor == 'indoor':
         return .2 * rain, 1.0
     if indoor_outdoor == 'indoor':
         return 0.0, 0.0
     quality = 1.0 if indoor_outdoor == 'outdoor' else .5
+    wind = clip((values['wind_speed']-8)/7) if profile in ('beach', 'park', 'day_visit') else 0
     if profile == 'beach':
-        w = .4 * int(values.get('sky') == 1 and 24 <= temp <= 32) - .9*rain - .5*cold - .4*wind
+        # SKY describes cloud cover, not daylight or verified visitor demand.
+        w = -.9*rain - .5*cold - .4*wind
     elif profile in ('park', 'day_visit'):
         w = -.8*rain - .3*hot - .3*cold - .3*wind
     else:
         return 0.0, 0.0
     # The inferred exposure coefficient is represented by qW, applied once in fusion.
     return clip(w, -1, 1), quality
+
+
+def weather_value_reason(profile, indoor_outdoor, values):
+    required = ['temperature', 'precipitation_type']
+    if indoor_outdoor != 'indoor' and profile in ('beach', 'park', 'day_visit'):
+        required.append('wind_speed')
+    if not values or any(key not in values for key in required):
+        return 'WEATHER_COMPONENT_MISSING'
+    for key in required + (['precipitation_mm'] if 'precipitation_mm' in values else []):
+        value = values[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            return 'WEATHER_COMPONENT_INVALID'
+    if values['precipitation_type'] not in (0, 1, 2, 3, 4, 5, 6, 7):
+        return 'WEATHER_COMPONENT_INVALID'
+    if ('wind_speed' in required and values['wind_speed'] < 0) or values.get('precipitation_mm', 0) < 0:
+        return 'WEATHER_COMPONENT_INVALID'
+    return None
+
+
+def weather_at(weather, target, now, *, forecast=False):
+    """Validate source time separately from the forecast's target hour."""
+    if not weather:
+        return None, 'WEATHER_MISSING'
+    issued, valid = weather.get('issued_at'), weather.get('valid_at')
+    try:
+        if issued is None or valid is None or issued.utcoffset() is None or valid.utcoffset() is None:
+            return None, 'WEATHER_TIME_INVALID'
+        if issued > now or not freshness(issued, now, 'weather'):
+            return None, 'WEATHER_ISSUE_UNAVAILABLE'
+        if weather.get('fetched_at') and weather['fetched_at'] > now:
+            return None, 'WEATHER_ISSUE_UNAVAILABLE'
+        is_forecast = forecast or weather.get('product') in ('getUltraSrtFcst', 'getVilageFcst')
+        if is_forecast:
+            if weather.get('product') == 'getUltraSrtNcst' or valid != target.replace(minute=0, second=0, microsecond=0):
+                return None, 'WEATHER_TARGET_MISMATCH'
+        elif valid > target or (target-valid).total_seconds() >= 14400:
+            return None, 'WEATHER_TARGET_MISMATCH'
+    except (AttributeError, TypeError, ValueError):
+        return None, 'WEATHER_TIME_INVALID'
+    return weather, None
 
 
 def opening_status(schedule, at, fallback=None):
@@ -217,8 +260,12 @@ def estimate(inputs, now, previous=None, *, trend_enabled=(True, True, True)):
     qe = freshness(inputs.get('events_checked_at'), now, 'event') * inputs.get('event_coverage', 0)
     events = inputs.get('events', [])
     e = event_effect(events, inputs['latitude'], inputs['longitude'], now) if qe else 0
-    weather = inputs.get('weather')
+    weather, weather_reason = weather_at(inputs.get('weather'), now, now)
+    if weather and not weather_reason:
+        weather_reason = weather_value_reason(profile, inputs.get('indoor_outdoor'), weather.get('values'))
     w, wq = weather_effect(profile, inputs.get('indoor_outdoor'), weather.get('values') if weather else None)
+    if weather and not weather_reason and not wq:
+        weather_reason = 'WEATHER_PROFILE_UNSUPPORTED'
     qw = freshness(weather['issued_at'], now, 'weather') * wq if weather else 0
     ctx_base = baseline.get('context', {}) if empirical else {}
     ec = 12*qe*(e-ctx_base.get('event', 0))
@@ -256,22 +303,32 @@ def estimate(inputs, now, previous=None, *, trend_enabled=(True, True, True)):
          'description': '같은 요일·시간의 관측 기준선' if empirical else '관광지 유형·시간·휴일·계절에 따른 초기 가정' +
              (' (방학 시즌 가정 포함)' if profile in ('day_visit','park','beach') and local.month in (1,2,7,8) else '')},
         {'key': 'population', 'available': qp>0, 'contribution_points': round(a*up*dp/(up+ut), 2) if up+ut else 0,
+         'unavailable_reason': None if qp else inputs.get('mapping_unavailable_reason') or 'NO_VALID_POPULATION',
          'description': '관광지 주변 영역의 체류 인구를 반영합니다.'},
         {'key': 'transit', 'available': qt>0, 'contribution_points': round(a*ut*dt/(up+ut), 2) if up+ut else 0,
+         'unavailable_reason': 'NO_COMPARABLE_TRANSIT' if not qt else None,
          'description': '주변 영역의 최근 30분 하차량을 평소와 비교합니다.'},
         {'key': 'smoothing', 'available': bool(times), 'contribution_points': round(a*(smoothed-delta), 2),
          'description': '최근 관측 변화의 일시적인 흔들림을 완화합니다.'},
         {'key': 'event', 'available': qe>0, 'contribution_points': round((1-a)*ec, 2),
+         'unavailable_reason': 'EVENT_COVERAGE_UNAVAILABLE' if not qe else None,
          'description': 'KTO 주변 행사 정보입니다. 날짜만 확인된 행사는 약하게 반영합니다.'},
         {'key': 'weather', 'available': qw>0, 'contribution_points': round((1-a)*wc, 2),
+         'unavailable_reason': (weather_reason or 'WEATHER_PROFILE_UNSUPPORTED') if not qw else None,
          'description': '실내외 유형을 추론한 날씨 영향은 절반만 반영합니다.' if wq==.5 else '관광지 유형에 따른 날씨 영향을 반영합니다.'},
     ]
     factors.append({'key': 'bounds', 'available': True, 'contribution_points': round(score-sum(f['contribution_points'] for f in factors), 2), 'description': '점수 범위 제한과 반올림'})
     limits = ['RELATIVE_LEVEL_NOT_PHYSICAL_DENSITY', 'CONFIDENCE_IS_EVIDENCE_QUALITY']
     if mapping:
         limits.append('AREA_POPULATION_IS_NOT_PLACE_VISITOR_COUNT')
+    if inputs.get('mapping_unavailable_reason'):
+        limits.append(inputs['mapping_unavailable_reason'])
     if tier == 'C':
         limits.append('HEURISTIC_PRIOR_NOT_OBSERVED_VISITS')
+    if not empirical:
+        limits.append('EMPIRICAL_BASELINE_UNAVAILABLE')
+    if qe and any(event.get('time_quality') != 'verified' for event in events):
+        limits.append('EVENT_TIME_UNCONFIRMED')
     if not calendar.get(local.date()):
         limits.append('PUBLIC_HOLIDAY_UNCONFIRMED')
     if profile in ('day_visit', 'park', 'beach') and local.month in (1, 2, 7, 8):

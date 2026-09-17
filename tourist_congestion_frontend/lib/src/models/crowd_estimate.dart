@@ -1,3 +1,5 @@
+import 'crowd_forecast.dart';
+import 'event_context.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
@@ -17,7 +19,9 @@ enum EstimatedCrowdLevel {
 
 class CrowdEstimate {
   CrowdEstimate.fromJson(Map<String, dynamic> json)
-      : status = json['status'] as String? ?? 'unavailable',
+      : eventContext = EventContext.parse(json['event_context']),
+        eventContexts = (json['event_contexts'] is List ? json['event_contexts'] as List : []).map(EventContext.parse).whereType<EventContext>().toList(),
+        status = json['status'] as String? ?? 'unavailable',
         score = (json['crowd_score'] as num?)?.round(),
         level = EstimatedCrowdLevel.parse(json['crowd_level']),
         confidence =
@@ -34,6 +38,9 @@ class CrowdEstimate {
         sources = _maps(json['sources']),
         forecast = _maps(json['forecast']);
 
+  final EventContext? eventContext;
+  final List<EventContext> eventContexts;
+  EventContext? eventsAt(DateTime? at) => at == null ? eventContext : eventContexts.where((e) => e.validAt?.isAtSameMomentAs(at) ?? false).firstOrNull;
   final String status, tier, kind;
   final String? openStatus;
   final int? score;
@@ -43,6 +50,7 @@ class CrowdEstimate {
   final DateTime? estimatedAt, dataAsOf;
   final Map<String, dynamic> scope;
   final List<Map<String, dynamic>> factors, sources, forecast;
+  List<CrowdForecast> get hourlyForecasts => forecast.map(CrowdForecast.fromJson).toList();
   bool get available => status == 'available' && score != null && level != null;
   bool get lowConfidence => tier == 'C' || confidence < .4;
   bool get expiredLocally =>

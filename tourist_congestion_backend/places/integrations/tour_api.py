@@ -280,6 +280,7 @@ class TourAPIClient:
         page_size=100,
         modified_since=None,
         region_code=None,
+        content_type_id=None,
     ):
         params = {
             **self._base_params(),
@@ -287,6 +288,8 @@ class TourAPIClient:
             'pageNo': page_number,
             'numOfRows': page_size,
         }
+        if content_type_id:
+            params['contentTypeId'] = content_type_id
         if modified_since:
             params['modifiedtime'] = modified_since
         if region_code:

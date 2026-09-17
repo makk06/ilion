@@ -3,7 +3,8 @@ from datetime import timedelta
 import math
 
 from django.conf import settings
-from django.db.models import Q, OuterRef, Subquery, Case, When, Value
+from django.db.models import Q, F, OuterRef, Subquery
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from places.integrations.weather import weather_grid
@@ -12,6 +13,7 @@ from places.models import (CalendarDay, CollectorState, CrowdArea, CrowdData, Cr
     TransitObservation, WeatherSnapshot)
 from .crowd_estimator import KST, MODEL_VERSION, estimate, profile_for, profiles as profile_config
 from .crowd_confidence import freshness
+from .place_resolver import select_mapping
 
 
 def _source(provider, observed, fetched, role, **extra):
@@ -28,23 +30,34 @@ def load_inputs(places, now):
     sources = {}
     for s in PlaceSource.objects.filter(place_id__in=ids, source='tour_api', match_status='matched').order_by('id'):
         sources.setdefault(s.place_id, s)
-    mappings = {}
+    mappings, mapping_candidates, mapping_reasons = {}, {}, {}
     for m in PlaceCrowdArea.objects.filter(place_id__in=ids, verified=True).filter(
             Q(valid_from__isnull=True)|Q(valid_from__lte=now)).filter(
-            Q(valid_until__isnull=True)|Q(valid_until__gt=now)).select_related('crowd_area').annotate(
-                mapping_priority=Case(When(match_method__in=('manual','source'),then=Value(0)),default=Value(1))
-            ).order_by('mapping_priority','-is_primary', 'id'):
-        mappings.setdefault(m.place_id, m)
+            Q(valid_until__isnull=True)|Q(valid_until__gt=now)).select_related('crowd_area'):
+        mapping_candidates.setdefault(m.place_id, []).append(m)
+    for place_id, candidates in mapping_candidates.items():
+        mapping, reason = select_mapping(candidates, now)
+        if mapping:
+            mappings[place_id] = mapping
+        if reason:
+            mapping_reasons[place_id] = reason
     area_ids = {m.crowd_area_id for m in mappings.values()}
     population = {}
-    latest_pop = CrowdData.objects.filter(crowd_area_id=OuterRef('pk'), observed_at__lte=now,
-            observed_at__gte=now-timedelta(hours=24)).order_by('-observed_at','-id')
+    latest_pop = CrowdData.objects.annotate(received_at=Coalesce('fetched_at', 'created_at')).filter(
+        crowd_area_id=OuterRef('pk'), observed_at__lte=now, received_at__lte=now,
+        observed_at__gt=now-timedelta(hours=1), is_replaced=False,
+        population_min__gte=0, population_max__gte=F('population_min'))
+    for flag in ('is_demo', '_is_demo', 'demo', 'dev_seed'):
+        latest_pop = latest_pop.filter(Q(**{f'raw_data__{flag}__isnull': True}) | Q(**{f'raw_data__{flag}': False}))
+    latest_pop = latest_pop.order_by('-observed_at','-id')
     latest_ids = CrowdArea.objects.filter(pk__in=area_ids).annotate(latest_id=Subquery(latest_pop.values('pk')[:1])).values('latest_id')
     for row in CrowdData.objects.filter(pk__in=Subquery(latest_ids)):
         population.setdefault(row.crowd_area_id, row)
     transit = {}
     latest_transit = TransitObservation.objects.filter(crowd_area_id=OuterRef('crowd_area_id'), mode=OuterRef('mode'),
-            window_minutes=30, observed_at__lte=now, observed_at__gte=now-timedelta(minutes=30)).order_by('-observed_at','-id')
+            window_minutes=30, observed_at__lte=now, fetched_at__lte=now,
+            arrivals_min__gte=0, arrivals_max__gte=F('arrivals_min'),
+            observed_at__gt=now-timedelta(minutes=30)).order_by('-observed_at','-id')
     for row in TransitObservation.objects.filter(crowd_area_id__in=area_ids, pk=Subquery(latest_transit.values('pk')[:1])):
         transit.setdefault((row.crowd_area_id, row.mode), row)
     base = {}
@@ -62,11 +75,11 @@ def load_inputs(places, now):
             area_baselines.setdefault(area, {})[weekday, hour] = {
                 'median': row.median, 'sample_days': row.sample_days, 'coverage': row.coverage, 'context': row.context}
     calendars = {c.date: {'is_holiday': c.is_holiday, 'holiday_run': c.holiday_run, 'fetched_at': c.fetched_at}
-                 for c in CalendarDay.objects.filter(date__gte=now.astimezone(KST).date(), date__lte=(now+timedelta(hours=3)).astimezone(KST).date())
+                 for c in CalendarDay.objects.filter(fetched_at__lte=now, date__gte=now.astimezone(KST).date(), date__lte=(now+timedelta(hours=3)).astimezone(KST).date())
                  if freshness(c.fetched_at, now, 'calendar') > 0}
     events = list(TourEvent.objects.filter(active=True, end_date__gte=(now-timedelta(days=1)).date(),
         start_date__lte=(now+timedelta(days=1)).date(), fetched_at__lte=now).values())
-    event_state = CollectorState.objects.filter(provider='tour_api', key='events').first()
+    event_state = CollectorState.objects.filter(provider='tour_api', key='events', last_success_at__lte=now).first()
     grids = {}
     for p in places:
         profile = profiles.get(p.pk)
@@ -96,7 +109,8 @@ def load_inputs(places, now):
             'calendars': calendars, 'baselines': baselines,
             'distribution': distribution.distribution if distribution and distribution.sample_days >= 28 and distribution.coverage >= .7 else [],
             'baseline_version': distribution.version if distribution else '',
-            'mapping': {}, 'population': None, 'transit': [], 'events': events,
+            'mapping': {}, 'mapping_unavailable_reason': mapping_reasons.get(p.pk),
+            'population': None, 'transit': [], 'events': events,
             'events_checked_at': event_state.last_success_at if event_state else None,
             'event_coverage': event_state.cursor.get('coverage', .5 if event_state.cursor.get('page') else 1) if event_state and event_state.last_success_at else 0,
             'weather': None, 'forecast_weather': {}, 'sources': []}
@@ -111,7 +125,8 @@ def load_inputs(places, now):
         if pop and pop.population_min is not None and pop.population_max is not None and 0 <= pop.population_min <= pop.population_max:
             inp['population'] = {'value': (pop.population_min+pop.population_max)/2,
                 'min': pop.population_min, 'max': pop.population_max, 'observed_at': pop.observed_at,
-                'is_replaced': pop.is_replaced, 'level': pop.crowd_level}
+                'is_replaced': pop.is_replaced, 'level': pop.crowd_level,
+                'fetched_at': pop.fetched_at or pop.created_at}
             inp['is_demo'] |= bool(pop.raw_data.get('is_demo') or pop.raw_data.get('_is_demo') or pop.raw_data.get('dev_seed'))
             inp['sources'].append(_source('seoul_citydata' if pop.raw_data.get('_provider') == 'citydata' else 'seoul_population',
                 pop.observed_at, pop.fetched_at or pop.created_at, 'area_population', timestamp_quality='source', is_replaced=pop.is_replaced))
@@ -122,7 +137,8 @@ def load_inputs(places, now):
             if row and baseline:
                 inp['transit'].append({'mode': mode, 'value': (row.arrivals_min+row.arrivals_max)/2,
                     'baseline': baseline.median, 'sample_days': baseline.sample_days,
-                    'observed_at': row.observed_at, 'timestamp_quality': row.timestamp_quality})
+                    'observed_at': row.observed_at, 'fetched_at': row.fetched_at,
+                    'timestamp_quality': row.timestamp_quality})
                 inp['sources'].append(_source('seoul_citydata', row.observed_at, row.fetched_at, 'transit_'+mode, timestamp_quality=row.timestamp_quality))
         grid_weather = by_grid.get(grids[p.pk], [])
         for h in range(4):
@@ -135,7 +151,8 @@ def load_inputs(places, now):
                 target_hour = target.replace(minute=0, second=0, microsecond=0)
                 row = next((w for w in grid_weather if w.product != 'getUltraSrtNcst' and w.valid_at == target_hour), None)
             if row:
-                value = {'issued_at': row.issued_at, 'valid_at': row.valid_at, 'values': row.values}
+                value = {'issued_at': row.issued_at, 'valid_at': row.valid_at, 'values': row.values,
+                         'product': row.product, 'fetched_at': row.fetched_at}
                 if h == 0:
                     inp['weather'] = value
                 else:
@@ -163,11 +180,9 @@ def estimates_for(places, now=None, *, persist=False):
         'confidence':0,'estimated_visitors':None,'forecast':[],'is_demo':False,
         'limitations':['INVALID_PLACE_METADATA']} for p in places if p.pk not in inputs}
     disabled = set(getattr(settings, 'CROWD_DISABLE_TREND_HORIZONS', []))
-    evaluation = CollectorState.objects.filter(provider='system', key='evaluation').first()
-    disabled.update(evaluation.cursor.get('disabled_horizons', []) if evaluation else [])
     for place in usable:
         old = previous.get(place.pk)
-        if old and not persist and old.refresh_after > now and old.model_version == MODEL_VERSION:
+        if old and not persist and old.estimated_at <= now < old.refresh_after and old.model_version == MODEL_VERSION:
             result[place.pk] = old.payload
             continue
         payload, state = estimate(inputs[place.pk], now, old.state if old else None,
@@ -178,7 +193,15 @@ def estimates_for(places, now=None, *, persist=False):
                 'estimated_at': now, 'refresh_after': now+timedelta(minutes=5), 'model_version': MODEL_VERSION})
             from .crowd_evaluation import record_forecast
             record_forecast(place, inputs[place.pk], payload, now)
-    return result
+    from .mean_study import adapter
+    for place_id, payload in result.items():
+        area_id = inputs.get(place_id, {}).get('mapping', {}).get('area_id')
+        if area_id:
+            result[place_id] = adapter(payload, area_id, now)
+    from .hourly_adapter import adapt_many
+    from .event_context import attach_context
+    from .event_validation import adapt as adapt_events
+    return attach_context(adapt_events(adapt_many(result, now), now), now)
 
 
 def summary(payload):

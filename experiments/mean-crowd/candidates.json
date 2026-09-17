@@ -1,0 +1,35 @@
+{
+  "candidates": [
+    1,
+    2,
+    3
+  ],
+  "grids": {
+    "1": "60,127",
+    "2": "60,127",
+    "3": "60,127"
+  },
+  "mapping_evidence": [
+    {
+      "area_id": 1,
+      "external_id": "POI008",
+      "geometry_version": "2026-04-02",
+      "source_url": "https://data.seoul.go.kr/dataList/OA-21285/A/1/datasetView.do",
+      "method": "official area geometry representative point to existing KMA DFS converter"
+    },
+    {
+      "area_id": 2,
+      "external_id": "POI009",
+      "geometry_version": "2026-04-02",
+      "source_url": "https://data.seoul.go.kr/dataList/OA-21285/A/1/datasetView.do",
+      "method": "official area geometry representative point to existing KMA DFS converter"
+    },
+    {
+      "area_id": 3,
+      "external_id": "POI060",
+      "geometry_version": "2026-04-02",
+      "source_url": "https://data.seoul.go.kr/dataList/OA-21285/A/1/datasetView.do",
+      "method": "official area geometry representative point to existing KMA DFS converter"
+    }
+  ]
+}

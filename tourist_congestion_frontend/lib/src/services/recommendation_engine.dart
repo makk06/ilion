@@ -1,3 +1,4 @@
+import '../models/crowd_forecast.dart';
 import '../models/place.dart';
 import '../models/place_category.dart';
 import '../models/user_preference.dart';
@@ -9,8 +10,17 @@ class Recommendation {
     required this.place,
     required this.score,
     required this.reasons,
+    this.visitAt,
+    this.forecast,
+    this.crowdForRanking,
   });
 
+  final DateTime? visitAt;
+  final CrowdForecast? forecast;
+  final double? crowdForRanking;
+  String? get comparisonGroup => forecast?.rankingEligible == true
+      ? '${forecast!.group}|${forecast!.issuedAt!.toUtc().toIso8601String()}'
+      : null;
   final Place place;
 
   /// 0~100.
@@ -42,10 +52,13 @@ class RecommendationEngine {
   List<Recommendation> recommend({
     required List<Place> places,
     required UserPreference preference,
+    DateTime? visitAt,
+    DateTime? now,
     PlaceCategory? category,
     Place? anchor,
     double anchorRadiusKm = 3.0,
   }) {
+    final clock = now ?? DateTime.now();
     final results = <Recommendation>[];
 
     for (final place in places) {
@@ -71,6 +84,8 @@ class RecommendationEngine {
       results.add(
         _score(
           place: place,
+          visitAt: visitAt,
+          now: clock,
           preference: preference,
           anchor: anchor,
           anchorDistanceKm: anchorDistanceKm,
@@ -83,14 +98,40 @@ class RecommendationEngine {
     return results;
   }
 
+  CrowdForecast? forecastAt(
+    Place place,
+    DateTime visitAt,
+    DateTime now, {
+    bool ranking = false,
+  }) {
+    if (place.isDemo || place.isClosed || !visitAt.isAfter(now)) return null;
+    return place.crowdEstimate?.hourlyForecasts
+        .where(
+          (f) =>
+              f.validAt?.isAtSameMomentAs(visitAt) == true &&
+              f.usableAt(now, ranking: ranking),
+        )
+        .firstOrNull;
+  }
+
   Recommendation _score({
     required Place place,
+    required DateTime now,
+    DateTime? visitAt,
     required UserPreference preference,
     Place? anchor,
     double? anchorDistanceKm,
     double anchorRadiusKm = 3.0,
   }) {
-    final crowdFit = _crowdFit(place, preference);
+    final future = visitAt == null ? null : forecastAt(place, visitAt, now);
+    final ranked = visitAt == null
+        ? null
+        : forecastAt(place, visitAt, now, ranking: true);
+    final crowdFit = visitAt == null
+        ? _crowdFit(place, preference)
+        : ranked == null
+        ? null
+        : _rawCrowdFit(ranked.score!, preference);
     final categoryFit = _categoryFit(place, preference);
     final typeFit = _typeFit(place, preference);
     final distanceFit = _distanceFit(place, preference);
@@ -117,6 +158,8 @@ class RecommendationEngine {
       final similarity = _similarity(
         anchor: anchor,
         place: place,
+        visitAt: visitAt,
+        now: now,
         anchorDistanceKm: anchorDistanceKm ?? 0,
         anchorRadiusKm: anchorRadiusKm,
       );
@@ -125,18 +168,37 @@ class RecommendationEngine {
 
     return Recommendation(
       place: place,
+      visitAt: visitAt,
+      forecast: future,
+      crowdForRanking: visitAt == null
+          ? (place.canUseCrowd && place.crowdConfidence >= .4
+                ? place.crowdScore?.toDouble()
+                : null)
+          : ranked?.score,
       score: (total * 100).round().clamp(0, 100),
-      reasons: _reasons(
-        place: place,
-        preference: preference,
-        anchor: anchor,
-        anchorDistanceKm: anchorDistanceKm,
-        crowdFit: crowdFit,
-        categoryFit: categoryFit,
-        typeFit: typeFit,
-        distanceFit: distanceFit,
-        weatherFit: weatherFit,
-      ),
+      reasons: visitAt != null
+          ? [
+              if (future == null)
+                '해당 시각 혼잡 정보 없음'
+              else if (ranked == null)
+                '해당 시각 혼잡 순위 미검증'
+              else
+                '${forecastTimeLabel(visitAt, now)} · ${future.relativeLabel}',
+              if (categoryFit == 1) '관심 카테고리 · ${place.mainCategory!.label}',
+              if (distanceFit != null && distanceFit >= .8)
+                '${place.distance}로 가까워요',
+            ]
+          : _reasons(
+              place: place,
+              preference: preference,
+              anchor: anchor,
+              anchorDistanceKm: anchorDistanceKm,
+              crowdFit: crowdFit,
+              categoryFit: categoryFit,
+              typeFit: typeFit,
+              distanceFit: distanceFit,
+              weatherFit: weatherFit,
+            ),
     );
   }
 
@@ -145,12 +207,15 @@ class RecommendationEngine {
   /// "활기찬 곳을 좋아하는 사용자"에게만 조금 깎는다.
   double? _crowdFit(Place place, UserPreference preference) {
     if (!place.canUseCrowd) return null;
-    final desired = preference.crowdTolerance * 100;
-    final diff = (place.crowdScore! - desired) / 100;
-    final raw = diff > 0
+    final raw = _rawCrowdFit(place.crowdScore!.toDouble(), preference);
+    return 0.5 + place.crowdConfidence * (raw - 0.5);
+  }
+
+  double _rawCrowdFit(double score, UserPreference preference) {
+    final diff = (score - preference.crowdTolerance * 100) / 100;
+    return diff > 0
         ? (1 - diff).clamp(0.0, 1.0)
         : (1 - diff.abs() * preference.crowdTolerance * 0.6).clamp(0.0, 1.0);
-    return 0.5 + place.crowdConfidence * (raw - 0.5);
   }
 
   double? _categoryFit(Place place, UserPreference preference) {
@@ -194,6 +259,8 @@ class RecommendationEngine {
   /// 대안 추천용 유사도. 같은 대분류·공통 태그·가까운 거리에 가점을 주고,
   /// 원래 장소보다 한산하면 추가 가점을 준다.
   double _similarity({
+    DateTime? visitAt,
+    required DateTime now,
     required Place anchor,
     required Place place,
     required double anchorDistanceKm,
@@ -202,13 +269,14 @@ class RecommendationEngine {
     var score = 0.0;
     score +=
         place.mainCategory != null && place.mainCategory == anchor.mainCategory
-            ? 0.35
-            : 0.1;
+        ? 0.35
+        : 0.1;
 
     final sharedTags = place.tags.toSet().intersection(anchor.tags.toSet());
     score += (sharedTags.length * 0.1).clamp(0.0, 0.2);
 
-    score += place.indoorOutdoor != IndoorOutdoor.unknown &&
+    score +=
+        place.indoorOutdoor != IndoorOutdoor.unknown &&
             place.indoorOutdoor == anchor.indoorOutdoor
         ? 0.1
         : 0.0;
@@ -217,9 +285,21 @@ class RecommendationEngine {
         (1 - anchorDistanceKm / anchorRadiusKm).clamp(0.0, 1.0) * 0.15;
     score += proximity;
 
-    if (anchor.canUseCrowd && place.canUseCrowd) {
-      final relief =
-          ((anchor.crowdScore! - place.crowdScore!) / 100).clamp(0.0, 1.0);
+    if (visitAt != null) {
+      final a = forecastAt(anchor, visitAt, now, ranking: true);
+      final b = forecastAt(place, visitAt, now, ranking: true);
+      if (a != null &&
+          b != null &&
+          a.group == b.group &&
+          a.externalId != b.externalId &&
+          a.issuedAt!.isAtSameMomentAs(b.issuedAt!)) {
+        score += ((a.score! - b.score!) / 100).clamp(0.0, 1.0) * .2;
+      }
+    } else if (anchor.canUseCrowd && place.canUseCrowd) {
+      final relief = ((anchor.crowdScore! - place.crowdScore!) / 100).clamp(
+        0.0,
+        1.0,
+      );
       score += relief * 0.2 * place.crowdConfidence * anchor.crowdConfidence;
     }
 
@@ -248,7 +328,7 @@ class RecommendationEngine {
           anchor.crowdConfidence >= .7 &&
           crowdFit != null &&
           _crowdFit(anchor, preference) != null &&
-          place.crowdScore! < anchor.crowdScore! - 10) {
+          _stage(place.crowdScore!) < _stage(anchor.crowdScore!)) {
         reasons.add('${anchor.name}보다 예상 혼잡 단계가 낮아요');
       }
       if (anchorDistanceKm != null && anchorDistanceKm <= 1.5) {
@@ -286,6 +366,16 @@ class RecommendationEngine {
 
     return reasons.take(3).toList();
   }
+
+  int _stage(num score) => score <= 20
+      ? 0
+      : score <= 40
+      ? 1
+      : score <= 65
+      ? 2
+      : score <= 85
+      ? 3
+      : 4;
 
   String _formatKm(double km) =>
       km < 1 ? '${(km * 1000).round()}m' : '${km.toStringAsFixed(1)}km';

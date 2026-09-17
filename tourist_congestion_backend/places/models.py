@@ -177,7 +177,8 @@ class CrowdArea(models.Model):
 class PlaceCrowdArea(models.Model):
     match_quality = models.FloatField(default=1.0, validators=[MinValueValidator(0), MaxValueValidator(1)])
     representativeness = models.FloatField(default=0.65, validators=[MinValueValidator(0), MaxValueValidator(1)])
-    verified = models.BooleanField(default=True)
+    verified = models.BooleanField(default=False)
+    evidence = models.JSONField(default=dict)
     is_primary = models.BooleanField(default=False)
     valid_from = models.DateTimeField(null=True, blank=True)
     valid_until = models.DateTimeField(null=True, blank=True)
@@ -275,3 +276,8 @@ from .crowd_models import (  # noqa: E402,F401 -- keep the existing places app/m
     CalendarDay, CollectorState, CrowdEstimate, ForecastEvaluation, HistoricalBaseline,
     HistoricalSample, PlaceCrowdProfile, TourEvent, TransitObservation, WeatherSnapshot,
 )
+
+from .mean_models import MeanEvidence, MeanStudy, MeanPrediction  # noqa: F401,E402
+from .hourly_models import HourlyStudy, HourlyTarget, HourlyObservation, HourlyRun, HourlyForecast, HourlyDaily  # noqa: F401,E402
+
+from .event_models import EventTargetLink, EventExperimentRun

@@ -156,7 +156,8 @@ TourAPI 필수 값이 빠진 레코드는 버리지 않고 `PlaceSource`에
 단위이므로, 수집 후 내부 장소와 명시적으로 연결합니다.
 
 ```bash
-python manage.py map_place_crowd_area PLACE_ID AREA_CD
+python manage.py diagnose_crowd_mappings --place-id PLACE_ID
+python manage.py map_place_crowd_area PLACE_ID AREA_CD --reviewer "검토자" --evidence "출처 및 판단 근거" --valid-until "2026-12-31T23:59:59+09:00"
 ```
 
 실제 운영 주기 실행은 아직 포함하지 않습니다. 호출 한도와 최초 대상 지역을

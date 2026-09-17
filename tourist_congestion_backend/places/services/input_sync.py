@@ -76,7 +76,14 @@ def save_event(item, now):
     old = TourEvent.objects.filter(external_id=external_id).first()
     if old and (old.start_date != start or old.end_date != end):
         resets = {'starts_at':None,'ends_at':None,'time_quality':'date_only'}
+    if old and old.source != 'tour_api':
+        return False
+    from .event_context import source_status
+    published = str(item.get('showflag', '1')) != '0'
     TourEvent.objects.update_or_create(external_id=external_id, defaults={**resets, 'name': str(item.get('title', ''))[:255],
+        'status': source_status(old, published),
+        'source_modified_at': str(item.get('modifiedtime', '')),
+        'source_url': 'https://korean.visitkorea.or.kr/detail/ms_detail.do?cotid=' + external_id if False else (old.source_url if old else ''),
         'latitude': lat, 'longitude': lon, 'start_date': start, 'end_date': end,
         'raw_data': item, 'fetched_at': now, 'active': str(item.get('showflag', '1')) != '0'})
     return True

@@ -1,3 +1,6 @@
+import '../models/crowd_estimate.dart';
+import '../models/crowd_forecast.dart';
+import 'event_notice.dart';
 import 'package:flutter/material.dart';
 
 import '../models/place.dart';
@@ -25,7 +28,10 @@ class RecommendationCard extends StatelessWidget {
 
   Place get place => recommendation.place;
 
-  Color get crowdColor => place.crowdColor;
+  Color get crowdColor => recommendation.visitAt == null
+      ? place.crowdColor
+      : EstimatedCrowdLevel.parse(recommendation.forecast?.levelCode)?.color ??
+            Colors.grey;
 
   @override
   Widget build(BuildContext context) {
@@ -37,8 +43,9 @@ class RecommendationCard extends StatelessWidget {
       color: AppColors.surface,
       elevation: 0,
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: AppColors.border)),
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: AppColors.border),
+      ),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,
@@ -64,7 +71,9 @@ class RecommendationCard extends StatelessWidget {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                    fontSize: 16, fontWeight: FontWeight.w700),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                             IconButton(
@@ -82,8 +91,9 @@ class RecommendationCard extends StatelessWidget {
                                             SnackBar(
                                               behavior:
                                                   SnackBarBehavior.floating,
-                                              duration:
-                                                  const Duration(seconds: 2),
+                                              duration: const Duration(
+                                                seconds: 2,
+                                              ),
                                               content: Text(
                                                 nowSaved
                                                     ? '${place.name} 저장했어요'
@@ -93,11 +103,14 @@ class RecommendationCard extends StatelessWidget {
                                           );
                                       } catch (_) {
                                         if (!context.mounted) return;
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
                                           const SnackBar(
-                                              content: Text(
-                                                  '저장하지 못했어요. 다시 시도해 주세요.')),
+                                            content: Text(
+                                              '저장하지 못했어요. 다시 시도해 주세요.',
+                                            ),
+                                          ),
                                         );
                                       }
                                     },
@@ -114,13 +127,30 @@ class RecommendationCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         _MatchScore(score: recommendation.score),
+                        EventNoticeView(contextData: place.crowdEstimate?.eventsAt(recommendation.visitAt)),
+                        if (recommendation.visitAt != null)
+                          Text(
+                            forecastTimeLabel(
+                              recommendation.visitAt!,
+                              DateTime.now(),
+                            ),
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        if (recommendation.forecast != null)
+                          Text(
+                            recommendation.forecast!.groupLabel,
+                            style: const TextStyle(fontSize: 11),
+                          ),
                         const SizedBox(height: 8),
                         Text(
-                          [place.area, place.distance]
-                              .where((value) => value.isNotEmpty)
-                              .join(' · '),
+                          [
+                            place.area,
+                            place.distance,
+                          ].where((value) => value.isNotEmpty).join(' · '),
                           style: const TextStyle(
-                              fontSize: 12, color: AppColors.textMuted),
+                            fontSize: 12,
+                            color: AppColors.textMuted,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Wrap(
@@ -129,20 +159,26 @@ class RecommendationCard extends StatelessWidget {
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             CrowdBadge(
-                                label: [
-                                  if (place.isDemo) '개발 샘플',
-                                  if (place.isReplaced) '대체 정보',
-                                  place.crowdText,
-                                  if (place.isStale) '오래된 정보',
-                                ].join(' · '),
-                                color: crowdColor),
+                              label: recommendation.visitAt != null
+                                  ? (recommendation.forecast?.relativeLabel ??
+                                        '해당 시각 혼잡 정보 없음')
+                                  : [
+                                      if (place.isDemo) '개발 샘플',
+                                      if (place.isReplaced) '대체 정보',
+                                      place.crowdText,
+                                      if (place.isStale) '오래된 정보',
+                                    ].join(' · '),
+                              color: crowdColor,
+                            ),
                             Text(
                               [
                                 place.mainCategory?.label ?? place.category,
-                                place.indoorOutdoor.label
+                                place.indoorOutdoor.label,
                               ].where((value) => value.isNotEmpty).join(' · '),
                               style: const TextStyle(
-                                  fontSize: 12, color: AppColors.textMuted),
+                                fontSize: 12,
+                                color: AppColors.textMuted,
+                              ),
                             ),
                           ],
                         ),
@@ -164,11 +200,16 @@ class RecommendationCard extends StatelessWidget {
               ],
               if (place.description.isNotEmpty) ...[
                 const SizedBox(height: 10),
-                Text(place.description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textMuted, height: 1.5)),
+                Text(
+                  place.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textMuted,
+                    height: 1.5,
+                  ),
+                ),
               ],
             ],
           ),

@@ -103,7 +103,7 @@ Flutter의 `CrowdEstimate`와 기존 `CrowdLevel`은 별개다. 공통 모델·�
 
 ## 예측 평가와 출시 확인
 
-`ForecastEvaluation`은 시간당 영역 대표 표본의 예측과 당시 경험 분포를 보존한다. 이후의 실제 인구를 그 분포로 변환하여 모델·baseline-only·persistence MAE를 비교한다. 공급자 예측과 모델 자신의 결과는 정답으로 쓰지 않는다. 최소 100개 및 7개 날짜의 평가가 있고 모델 MAE가 baseline 대비 10% 초과 악화되면 해당 horizon의 잔차·trend를 끄고 baseline+환경 결과로 전환한다. `system/evaluation`의 `disabled_horizons`는 운영 검토 전까지 유지한다. 실제 현장 정확도나 POI 내부 정확도를 검증한 것으로 해석하지 않는다.
+`ForecastEvaluation`은 POI 환경·대표성·평활 이력을 제외한 영역 관측 기반 `area_core` 예측과 발행 당시 입력·경험 분포를 보존한다. 이후 실제 인구를 고정 분포로 변환하여 baseline-only·persistence와 MAE를 비교한다. 공급자 예측과 모델 자신의 결과는 정답이 아니다. 모델·범위·기준선 계산 정책·horizon별로 나누고 영역별 MAE를 균등 평균한다. 최소100개·7일·2영역·평일/주말을 충족한 평가가 baseline 대비10% 악화되면 경고만 보고한다. 과거 `disabled_horizons`는 공개 추정에 적용하지 않는다. 실제 현장 정확도나 전체 POI 예측 정확도로 해석하지 않는다.
 
 ```powershell
 python manage.py check
@@ -137,3 +137,26 @@ flutter build web --no-pub
 설정된 키로 서울 citydata 공식 카탈로그 첫 2개 영역, 기상청 초단기실황·초단기예보·단기예보(격자 60,127), 특일정보 당월 조회를 통과했다. TourAPI 목록·행사·공개 장소의 공통 상세 및 소개 상세 조회도 통과했다. 모든 요청은 기존 BudgetSession을 통해 실제 시도별 예산을 차감했다. 최초 제한 환경의 통신 실패 후 외부 통신 권한으로 검증했다.
 
 검증 명령의 TourAPI 첫 표본은 `showflag=0`인 비공개 장소여서 HTTP 200 / resultCode 0000에도 상세가 비어 실패로 보고되었다. 별도 소량 검증에서 공개 상태 장소를 선택해 상세 처리를 통과했다. 기존 명령의 표본 선택 로직은 아직 변경하지 않았다. 이는 121개 전체 영역 권한, 전체 페이지 동기화, 장기 안정성이나 모델 정확도 검증을 의미하지 않는다. 대량 수집 및 OS 스케줄러 등록은 이번 검증에서 수행하지 않았다.
+
+### 실제 데이터 검증 스프린트 결론 (2026-09-12 23:26 KST)
+
+결론은 MODIFY다. 자세한 근거와 실제 장소별 결과는 [VALIDATION_REPORT.md](../VALIDATION_REPORT.md)를 따른다. 실제 인증 호출 65회, 대표 관광지 6개, 서울 4영역 5회 반복, 기상청 6개 격자를 검증했다.
+
+현재 서울 일일 1,000회 설정의 220분 수집 주기는 시간 버킷 coverage 약27%로 경험적 기준선의 70% 요건과 양립하지 않는다. 기간만 늘려서는 해결되지 않는다. 1~3시간 예측 평가의 5분 label 창도 이 주기와 맞지 않으므로 호출량·평가 관측 전략을 먼저 해결해야 한다. 쿼터와 TTL은 임의 변경하지 않았다.
+
+공식 KTO 신규 해변 분류 NA020900을 지원하는 profiles-v2, 미래 시간대의 표본 품질과 지연 관측의 원천시각 기준 EWMA 이력을 반영하는 heuristic-v1.1을 적용했다. TourAPI 검증은 공개 표본을 선택한다. 새 회귀테스트 포함 Django 110개 통과. 모델 정확도나 현장 시설 혼잡도 검증으로 해석하지 않는다.
+
+### 검증 기반 최소 개선 (2026-09-13)
+
+현재 모델은 `heuristic-v1.2`다. [개선 보고서](../VALIDATION_IMPROVEMENT_PLAN.md)에 문제·대안·실제 재생/합성 결과·미검증 범위를 정리했다. 121개 균등220분 수집과 전국 예상5단계는 유지한다. `crowd_status`는 `CADENCE_INSUFFICIENT`를 보고하며 기준선70% 조건을 낮추지 않는다.
+
+최신 정상 인구만 발행 시점에 맞춰 선택하고, 원천 TTL 이후에는 제외한다. 해변 맑음 가점을 제거하고 실외 날씨 풍속 누락을 무풍으로 간주하지 않는다. 평가기는 POI와 분리된 `area_core`를 기록하며, 5분 정답 창과24시간 수신 기한을 지킨다. 모델/기준선 정책별 경고만 제공하고 공개 예측을 자동으로 끄지 않는다. 일별 기준선 버전은 각 입력 스냅샷에 보존한다.
+
+수동 매핑은 이제 검토자·근거·만료일을 요구한다. 다음은 명령 형식이며 실제 승인 근거와 미래 만료 시각으로 바꿔 실행한다. `--primary`는 명시적으로 대표 매핑을 변경할 때만 사용한다.
+
+```powershell
+python manage.py diagnose_crowd_mappings --place-id 1
+python manage.py map_place_crowd_area 1 POI008 --reviewer "검토자" --evidence "출처 문서/URL 및 판단 사유" --valid-until "2026-12-31T23:59:59+09:00" --primary
+```
+
+추가 migration `0007_validation_quality`는 기존 매핑의 승인·대표성을 보존하고 근거를 legacy로 표시한다. 적용 전 DB 백업을 권장한다. 재현 스크립트 `scripts/crowd-validation/improvement_checks.py`는 저장된 API 캡처만 사용하며 실제/합성 결과를 별도 JSON으로 남긴다.

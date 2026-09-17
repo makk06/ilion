@@ -1,2 +1,4 @@
 .integration-venv/
 .integration-artifacts/
+
+tourist_congestion_backend/hourly_raw/

@@ -15,16 +15,16 @@ class SeoulPlaceMappingResult:
 
 
 class SeoulPlaceMappingService:
-    def apply(self, definitions, *, dry_run=False):
+    def apply(self, definitions, *, dry_run=False, catalog_version=None):
         if dry_run:
             with transaction.atomic():
-                result = self._apply(definitions)
+                result = self._apply(definitions, catalog_version)
                 transaction.set_rollback(True)
                 return result
-        return self._apply(definitions)
+        return self._apply(definitions, catalog_version)
 
     @staticmethod
-    def _apply(definitions):
+    def _apply(definitions, catalog_version=None):
         result = SeoulPlaceMappingResult()
         for definition in definitions:
             result.attempted += 1
@@ -53,6 +53,9 @@ class SeoulPlaceMappingService:
                 crowd_area=crowd_area,
                 defaults={
                     'match_method': PlaceCrowdArea.MatchMethod.SOURCE,
+                    'verified': True,
+                    'evidence': {'type': 'versioned_catalog', 'catalog_version': catalog_version, 'place_external_id': definition.place_external_id,
+                                 'area_external_id': definition.crowd_area_external_id},
                 },
             )
             result.created += int(created)

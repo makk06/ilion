@@ -54,8 +54,18 @@ class WeatherSnapshot(models.Model):
 class TourEvent(models.Model):
     external_id = models.CharField(max_length=255, unique=True)
     name = models.CharField(max_length=255)
-    latitude = models.FloatField()
-    longitude = models.FloatField()
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    source = models.CharField(max_length=20, default="tour_api")
+    source_url = models.URLField(blank=True)
+    source_modified_at = models.CharField(max_length=32, blank=True)
+    first_seen_at = models.DateTimeField(null=True, editable=False)
+    changed_at = models.DateTimeField(null=True, editable=False)
+    status = models.CharField(max_length=20, default="scheduled", choices=[(v,v) for v in ("scheduled", "cancelled", "unpublished")])
+    family = models.CharField(max_length=120, blank=True)
+    edition = models.CharField(max_length=120, blank=True)
+    detail_pending = models.BooleanField(default=True)
+    content_hash = models.CharField(max_length=64, blank=True, editable=False)
     start_date = models.DateField()
     end_date = models.DateField()
     starts_at = models.DateTimeField(null=True, blank=True)
@@ -146,7 +156,7 @@ class CollectorState(models.Model):
 
 class ForecastEvaluation(models.Model):
     """Frozen inputs/forecasts for forward-only, independently observed evaluation."""
-    place = models.ForeignKey('places.Place', on_delete=models.CASCADE)
+    place = models.ForeignKey('places.Place', on_delete=models.SET_NULL, null=True)
     crowd_area = models.ForeignKey('places.CrowdArea', on_delete=models.CASCADE)
     issued_at = models.DateTimeField()
     valid_at = models.DateTimeField()
@@ -156,7 +166,14 @@ class ForecastEvaluation(models.Model):
     persistence_score = models.FloatField()
     distribution = models.JSONField(default=list)
     actual_score = models.FloatField(null=True)
+    scope = models.CharField(max_length=40, default='legacy_place')
+    baseline_version = models.CharField(max_length=40, blank=True)
+    input_snapshot = models.JSONField(default=dict)
+    status = models.CharField(max_length=20, default='pending')
+    actual_observed_at = models.DateTimeField(null=True)
+    actual_received_at = models.DateTimeField(null=True)
     model_version = models.CharField(max_length=40)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=('place', 'issued_at', 'hours_ahead'), name='unique_forecast_evaluation')]
+        constraints = [models.UniqueConstraint(fields=('place', 'issued_at', 'hours_ahead'), name='unique_forecast_evaluation'),
+            models.UniqueConstraint(fields=('crowd_area','scope','model_version','issued_at','hours_ahead'), condition=models.Q(scope='area_core'), name='unique_area_core_forecast')]

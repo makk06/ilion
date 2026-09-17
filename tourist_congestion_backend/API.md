@@ -315,7 +315,7 @@ python manage.py sync_seoul_crowd_catalog --limit 3 --dry-run
 - 해석: `estimate_kind` (prior_based / observation_assisted / historical_based), `normalization` (heuristic_prior / provider_category_bootstrap / empirical_percentile), `is_demo`, `is_stale`, `open_status`.
 - 범위·시각: `spatial_scope`, `estimated_at`, `data_as_of`, `source_population` (공급자 영역 추정 인구), `relative_to_normal`와 source_area 범위. `estimated_visitors`는 null.
 - 설명: `factors`, `sources` (provider·role·observed_at·fetched_at·예보 issued_at), `limitations`, 모델·기준선·프로파일 버전.
-- `forecast`: 각 hours_ahead·valid_at·crowd_score·crowd_level·confidence·weather_available. 평가 실패 horizon은 baseline_fallback=true.
+- `forecast`: 각 hours_ahead·valid_at·crowd_score·crowd_level·confidence·weather_available. 운영 설정으로 명시적으로 제한한 horizon만 baseline_fallback=true이며, 평가 경고는 공개 예측을 자동으로 변경하지 않는다.
 
 단계는 VERY_LOW(0–20), LOW(21–40), NORMAL(41–65), HIGH(66–85), VERY_HIGH(86–100). 라벨은 매우 여유 / 여유 / 보통 / 혼잡 / 매우 혼잡.
 
@@ -324,3 +324,9 @@ python manage.py sync_seoul_crowd_catalog --limit 3 --dry-run
 미등록·비활성 장소는 404. 필수 메타데이터가 잘못되면 200과 status=unavailable, 점수·단계 null. DB 장애는 503. 기능 설정을 끄면 기존 응답으로 복귀하고 새 전용 endpoint는 unavailable을 반환한다. 모든 조회에서 외부 API 호출은 0회다.
 
 계수·출처·수집과 평가: [운영 안내](../docs/crowd-estimation.md).
+
+`heuristic-v1.2`에서는 `factors[].unavailable_reason`을 선택적으로 제공한다. 인구·교통·날씨·행사 근거의 제외 이유이며 null은 제외 이유가 없다는 뜻이다. `limitations`의 EMPIRICAL_BASELINE_UNAVAILABLE, EVENT_TIME_UNCONFIRMED, APPROVAL_CONFLICT 등은 근거의 제한을 설명한다. 기존 소비자는 알 수 없는 코드도 무시할 수 있어야 한다. 예상5단계·confidence 의미·latest_crowd 4단계 계약은 동일하다.
+
+## Event context (additive)
+
+Crowd payloads now include `event_context` (now), `event_contexts` (exact next three hours), and forecast-level `event_context`. Each has `valid_at`, `checked_at`, `collection_status`, `coverage`, and `events`. Event advice never grants crowd guidance/ranking eligibility. See [event collection and experiment operations](../docs/event-crowd.md).

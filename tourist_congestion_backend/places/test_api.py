@@ -70,6 +70,7 @@ class PlaceAPITests(TestCase):
             last_synced_at=now,
         )
         PlaceCrowdArea.objects.create(
+            verified=True,
             place=self.gyeongbokgung,
             crowd_area=area,
             match_method=PlaceCrowdArea.MatchMethod.SOURCE,

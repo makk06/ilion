@@ -20,8 +20,8 @@ from places.integrations.holidays import HolidayClient
 from .crowd_estimator import KST
 from .input_sync import save_citydata, save_weather, save_event, save_calendar
 
-LIMIT_ENV = {'seoul': 'SEOUL_DAILY_LIMIT', 'tour_api': 'TOUR_API_DAILY_LIMIT', 'kma': 'KMA_DAILY_LIMIT', 'kasi': 'HOLIDAY_DAILY_LIMIT'}
-KEY_ENV = {'seoul': 'SEOUL_OPEN_API_KEY', 'tour_api': 'TOUR_API_SERVICE_KEY', 'kma': 'KMA_SERVICE_KEY', 'kasi': 'HOLIDAY_SERVICE_KEY'}
+LIMIT_ENV = {'seoul': 'SEOUL_DAILY_LIMIT', 'tour_api': 'TOUR_API_DAILY_LIMIT', 'kma': 'KMA_DAILY_LIMIT', 'kasi': 'HOLIDAY_DAILY_LIMIT', 'tmap': 'TMAP_DAILY_LIMIT'}
+KEY_ENV = {'seoul': 'SEOUL_OPEN_API_KEY', 'tour_api': 'TOUR_API_SERVICE_KEY', 'kma': 'KMA_SERVICE_KEY', 'kasi': 'HOLIDAY_SERVICE_KEY', 'tmap': 'TMAP_APP_KEY'}
 
 
 class BudgetExhausted(ExternalAPIError):
@@ -75,6 +75,13 @@ def active_grids():
         return []
     rows = list(PlaceCrowdProfile.objects.exclude(grid_x=None).exclude(grid_y=None).select_related('place').order_by('-last_requested_at', '-updated_at'))
     selected, provinces = [], set()
+    from places.models import MeanStudy
+    study = MeanStudy.objects.filter(name='area-mean-v1').first()
+    if study:
+        for area in study.state.get('areas', study.config.get('candidates', [])):
+            grid = tuple(map(int, study.config['grids'][str(area)].split(',')))
+            if grid not in selected:
+                selected.append(grid)
     for row in rows:
         province = row.place.region_code.split('-')[0]
         grid = (row.grid_x, row.grid_y)
@@ -115,15 +122,26 @@ def run_once(*, max_seconds=45, provider_filter=None):
                 continue
             sessions[provider] = BudgetSession(lambda retry=False, p=provider: charge(p, retry))
         jobs = [('system', 'refresh', 300, None), ('system', 'baseline', 86400, None)]
-        if 'seoul' in sessions:
+        from places.hourly_models import HourlyStudy
+        hourly_enabled = HourlyStudy.objects.exists()
+        if hourly_enabled:
+            jobs.insert(0, ('system', 'hourly_v2', 60, provider_filter))
+        from places.models import MeanStudy
+        mean_study = MeanStudy.objects.filter(name='area-mean-v1').first()
+        if mean_study and (not hourly_enabled or mean_study.state.get('deployment') in ('mean', 'arithmetic')):
+            jobs.append(('system', 'mean_shadow', 60, None))
+        if 'seoul' in sessions and not HourlyStudy.objects.filter(provider='seoul').exists():
             areas = list(CrowdArea.objects.filter(source='seoul_realtime').order_by('external_id'))
+            if mean_study:
+                selected = mean_study.state.get('areas') if mean_study.state.get('selection_complete') else mean_study.config['candidates']
+                areas = [a for a in areas if a.pk in selected]
             interval = seoul_interval(daily_limit('seoul'), len(areas))
             for i, area in enumerate(areas):
                 state, created = CollectorState.objects.get_or_create(provider='seoul', key=area.external_id,
                     defaults={'next_run_at': now+timedelta(seconds=i*interval*60/max(1,len(areas)))})
                 jobs.append(('seoul', area.external_id, interval*60, area))
         if 'tour_api' in sessions:
-            jobs.extend([('tour_api', 'poi', 86400, None), ('tour_api', 'events', 21600, None),
+            jobs.extend([('tour_api', 'poi', 86400, None), ('tour_api', 'events', 3600, None),
                          ('tour_api', 'full_poi', 604800, None), ('tour_api', 'details', 3600, None),
                          ('tour_api', 'event_details', 3600, None)])
         if 'kma' in sessions:
@@ -188,7 +206,13 @@ def run_once(*, max_seconds=45, provider_filter=None):
 
 
 def _execute(provider, key, arg, session, state, now, *, lease_owner=None):
-    if provider == 'system' and key == 'baseline':
+    if provider == 'system' and key == 'hourly_v2':
+        from .hourly_collector import tick
+        tick(now, provider_filter=arg)
+    elif provider == 'system' and key == 'mean_shadow':
+        from .mean_study import tick
+        tick(now)
+    elif provider == 'system' and key == 'baseline':
         from .crowd_baseline import rebuild_baselines, prune_evidence
         from .crowd_evaluation import evaluate_forecasts
         at = now.astimezone(KST).replace(hour=4, minute=10, second=0, microsecond=0)
@@ -197,6 +221,17 @@ def _execute(provider, key, arg, session, state, now, *, lease_owner=None):
                 lease_until=timezone.now()+timedelta(minutes=3)))
             evaluate_forecasts(now)
             prune_evidence(now)
+            from places.models import MeanEvidence, MeanStudy
+            from .mean_monitor import monitor
+            MeanEvidence.objects.exclude(kind__in=['event','event_link']).filter(received_at__lt=now-timedelta(days=400)).delete()
+            from .event_context import prune as prune_events
+            prune_events(now)
+            for study in MeanStudy.objects.all():
+                monitor(study, now)
+            from .hourly_evaluation import monitor as hourly_monitor
+            from .hourly_store import prune
+            hourly_monitor(now)
+            prune(now)
             at += timedelta(days=1)
         state.next_run_at = at
     elif provider == 'system' and key == 'refresh':
@@ -231,20 +266,8 @@ def _execute(provider, key, arg, session, state, now, *, lease_owner=None):
         holidays = HolidayClient(session).fetch(*arg)
         save_calendar(*arg, holidays, now)
     elif key == 'events':
-        page = state.cursor.get('page', 1)
-        items, total = TourAPIClient(session=session).fetch_events_page(page_number=page)
-        expected = min(100, max(0,total-(page-1)*100))
-        if len(items) < expected:
-            raise ExternalAPIError('Incomplete event page')
-        invalid = state.cursor.get('invalid', 0)
-        for item in items:
-            invalid += int(not save_event(item, now))
-        if page*100 < total:
-            if not items:
-                raise ExternalAPIError('Incomplete event pagination')
-            state.cursor = {'page': page+1, 'invalid':invalid, 'seen':state.cursor.get('seen',0)+len(items)}
-            return False
-        state.cursor = {'coverage': max(0, 1-invalid/max(1,total))}
+        from .event_collection import collect_page
+        return collect_page(TourAPIClient(session=session), state, now)
     elif key in ('poi', 'full_poi'):
         from .tour_sync import TourPlaceSyncService
         from .place_resolver import resolve_places
@@ -271,15 +294,8 @@ def _execute(provider, key, arg, session, state, now, *, lease_owner=None):
             return False
         state.cursor = {'watermark':started}
     elif key == 'event_details':
-        # Sync-listed events also receive detail enrichment, including long-running events.
-        sources = list(PlaceSource.objects.filter(source='tour_api', match_status='matched', pk__gt=state.cursor.get('last_id',0)).filter(
-            Q(raw_data__contenttypeid='15')|Q(raw_data__contenttypeid=15)).order_by('id')[:5])
-        client = TourAPIClient(session=session)
-        for source in sources:
-            record = client.fetch_place_detail(source.external_id,'15')
-            save_event({**source.raw_data, **record.raw_data.get('common',{}), **record.raw_data.get('intro',{}),
-                        'contentid':source.external_id}, now)
-        state.cursor = {'last_id':sources[-1].pk} if len(sources)==5 else {}
+        from .event_collection import collect_details
+        return collect_details(TourAPIClient(session=session), state, now)
     elif key == 'details':
         from .tour_detail_sync import TourPlaceDetailSyncService
         # Small progressive enrichment; run through the existing verified service.

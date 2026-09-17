@@ -435,6 +435,8 @@ class SyncCommandTests(TestCase):
             'map_place_crowd_area',
             str(place.id),
             crowd_area.external_id,
+            '--reviewer', 'test reviewer', '--evidence', 'fixture approval',
+            '--valid-until', '2099-01-01T00:00:00+09:00',
             stdout=output,
         )
 

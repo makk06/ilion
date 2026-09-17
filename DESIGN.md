@@ -84,3 +84,16 @@ The community review tab shares AppSearchField, compact filters, card spacing, a
 
 ### Crowd estimate extension
 The five estimate colors map to AppColors.estimateVeryLow/Low/Normal/High/VeryHigh. Text labels carry meaning independently of color. CrowdBadge and CrowdEvidence share wording across all place surfaces; prior and low evidence states remain explicit. Forecast cards wrap on narrow screens. Existing primary forest palette and navigation remain canonical.
+
+Area mean forecasts reuse CrowdEvidence. Its forecast block identifies area-relative population rather than facility occupancy; uncalibrated quality uses `근거 품질 미평가`, never an accuracy percentage. Existing colors, typography and wrapping remain unchanged.
+
+
+## Hourly provider forecasts
+Preserve the existing evidence layout. TMAP place forecasts display density in persons/m² and explain that relative congestion is normalized only within the same place. Never show density in population-count fields or imply occupancy. Missing future values remain “정보 부족”; promotion is server-controlled and defaults off.
+# 방문 시각과 상대 혼잡 (2026-09-13)
+
+방문 시각은 기존 Material ChoiceChip으로 지금 및 검증된 정시를 선택한다. AppTheme의 녹색 팔레트를 유지한다. 한국 절대 시각을 카드와 선택지에 공통 표시하고 만료 시 재선택 안내를 유지한다. 평소 대비 혼잡이라는 관측 범위를 명시한다. 미검증·결측은 회색 정보 상태이며 한산한 색이나 추천 이유를 만들지 않는다. 정렬 그룹은 공급자·지표·범위·발행 시각을 공유하며 그룹 간 절대 혼잡 순위를 표현하지 않는다.
+
+## Event advice
+
+Use the existing crowd card typography and spacing. Event advice is independent of crowd level and score, and follows the exact selected visit time. Show event name, time or time-unknown label, source, and freshness text without implying attendance or occupancy. Missing events do not mean no event.

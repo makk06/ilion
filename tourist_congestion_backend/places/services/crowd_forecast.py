@@ -2,7 +2,7 @@ import math
 from datetime import timedelta
 
 from .crowd_confidence import confidence, freshness, clip
-from .crowd_estimator import KST, event_effect, level, percentile, prior, rounded, weather_effect
+from .crowd_estimator import KST, event_effect, level, percentile, prior, rounded, weather_effect, weather_at, weather_value_reason
 
 
 def forecast(inputs, now, baseline_now, a, delta, history, current_confidence,
@@ -20,8 +20,12 @@ def forecast(inputs, now, baseline_now, a, delta, history, current_confidence,
         dist = inputs.get('distribution', [])
         empirical = bool(dist and baseline and baseline['sample_days'] >= 4)
         b = percentile(dist, baseline['median']) if empirical else prior(inputs.get('profile', 'unknown'), at, inputs.get('calendars', {}).get(at.date()))
-        future_weather = inputs.get('forecast_weather', {}).get(h)
+        future_weather, weather_reason = weather_at(inputs.get('forecast_weather', {}).get(h), at, now, forecast=True)
+        if future_weather and not weather_reason:
+            weather_reason = weather_value_reason(inputs.get('profile', 'unknown'), inputs.get('indoor_outdoor'), future_weather.get('values'))
         w, quality = weather_effect(inputs.get('profile', 'unknown'), inputs.get('indoor_outdoor'), future_weather.get('values') if future_weather else None)
+        if future_weather and not weather_reason and not quality:
+            weather_reason = 'WEATHER_PROFILE_UNSUPPORTED'
         qw = freshness(future_weather['issued_at'], now, 'weather')*quality if future_weather else 0
         future_qe = freshness(inputs.get('events_checked_at'), at, 'event')*inputs.get('event_coverage', 0)
         e = event_effect(inputs.get('events', []), inputs['latitude'], inputs['longitude'], at) if future_qe else 0
@@ -42,6 +46,7 @@ def forecast(inputs, now, baseline_now, a, delta, history, current_confidence,
         result.append({'hours_ahead': h, 'valid_at': at.isoformat(), 'crowd_score': score,
             'crowd_level': level(score)[0], 'confidence': round(min(current_confidence, horizon_conf)*math.exp(-.12*h), 2),
             'baseline_score': round(b, 2), 'weather_available': bool(qw),
+            'weather_unavailable_reason': weather_reason if not qw else None,
             'baseline_fallback': not trend_enabled[h-1],
             'normalization': 'empirical_percentile' if empirical else 'heuristic_prior'})
     return result

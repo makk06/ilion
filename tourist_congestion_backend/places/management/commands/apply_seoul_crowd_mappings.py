@@ -19,6 +19,7 @@ class Command(BaseCommand):
         result = SeoulPlaceMappingService().apply(
             catalog.mappings,
             dry_run=options['dry_run'],
+            catalog_version=catalog.version,
         )
         prefix = '[dry-run] ' if options['dry_run'] else ''
         self.stdout.write(

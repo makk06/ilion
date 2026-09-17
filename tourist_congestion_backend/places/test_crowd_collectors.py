@@ -129,6 +129,6 @@ class CollectorStorageTests(TestCase):
         self.assertEqual(CrowdArea.objects.count(),121)
         place=Place.objects.create(name='manual',latitude=35,longitude=129,category='관광지',region_code='26',address='Busan')
         area=CrowdArea.objects.first()
-        mapping=PlaceCrowdArea.objects.create(place=place,crowd_area=area,match_method='manual')
+        mapping=PlaceCrowdArea.objects.create(place=place,crowd_area=area,match_method='manual',verified=True)
         resolve_places([place]); mapping.refresh_from_db()
         self.assertTrue(mapping.is_primary); self.assertTrue(mapping.verified)

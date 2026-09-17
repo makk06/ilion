@@ -104,12 +104,12 @@ class CrowdEstimatorTests(TestCase):
     def test_environment_is_suppressed_when_observations_are_strong(self):
         def change(data):
             before=estimate(data,NOW)[0]['crowd_score']
-            data['weather']={'issued_at':NOW,'values':{'temperature':20,'precipitation_type':1}}
+            data['weather']={'issued_at':NOW,'valid_at':NOW,'values':{'temperature':20,'precipitation_type':1,'wind_speed':0}}
             return abs(estimate(data,NOW)[0]['crowd_score']-before)
         self.assertLess(change(observed()),change(inputs()))
 
     def test_identical_weather_in_baseline_is_not_added_twice(self):
-        data=observed(); data['weather']={'issued_at':NOW,'values':{'temperature':20,'precipitation_type':1}}
+        data=observed(); data['weather']={'issued_at':NOW,'valid_at':NOW,'values':{'temperature':20,'precipitation_type':1,'wind_speed':0}}
         data['baselines'][NOW.weekday(),NOW.hour]['context']={'weather_park':-.8}
         self.assertEqual(next(f for f in estimate(data,NOW)[0]['factors'] if f['key']=='weather')['contribution_points'],0)
 
@@ -147,7 +147,7 @@ class CrowdEstimatorTests(TestCase):
         self.assertEqual(event_effect([event],37.57,126.97,NOW+timedelta(hours=2)),0)
 
     def test_weather_profiles_and_missing_future_weather(self):
-        values={'temperature':20,'precipitation_type':3}
+        values={'temperature':20,'precipitation_type':3,'wind_speed':0}
         self.assertEqual(weather_effect('park','outdoor',values),(-.8,1))
         self.assertEqual(weather_effect('park','unknown',values),(-.8,.5))
         self.assertEqual(weather_effect('shopping','indoor',values),(.2,1))
