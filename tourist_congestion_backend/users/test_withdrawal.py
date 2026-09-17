@@ -1,5 +1,8 @@
 import uuid
 from datetime import date, timedelta
+from io import StringIO
+
+from django.core.management import call_command
 
 from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
@@ -537,3 +540,23 @@ class NotificationTests(TestCase):
         response = client.get(reverse('notifications'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['data']['items'], [])
+
+
+class PurgeCommandTests(TestCase):
+    def test_command_purges_due_accounts_and_reports_the_count(self):
+        user = User.objects.create_user(
+            email='leaver@example.com', password='pw12345678', nickname='떠나는사람')
+        user.status = User.Status.WITHDRAWN
+        user.purge_at = timezone.now() - timedelta(seconds=1)
+        user.save(update_fields=['status', 'purge_at', 'updated_at'])
+
+        out = StringIO()
+        call_command('purge_withdrawn_users', stdout=out)
+
+        self.assertFalse(User.objects.filter(email='leaver@example.com').exists())
+        self.assertIn('1', out.getvalue())
+
+    def test_command_is_safe_when_nothing_is_due(self):
+        out = StringIO()
+        call_command('purge_withdrawn_users', stdout=out)
+        self.assertIn('0', out.getvalue())
