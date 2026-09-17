@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from places.models import ExternalSource, Place, PlaceSource
+from places.services.classification import classify_place
 
 
 @dataclass
@@ -125,6 +126,8 @@ class TourPlaceSyncService:
                 'last_synced_at': synced_at,
             },
         )
+        if record.is_active and place is not None:
+            classify_place(place)
         return {
             'source_created': int(source_created),
             'place_created': int(place_created),

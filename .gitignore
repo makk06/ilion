@@ -1,2 +1,3 @@
 .integration-venv/
 .integration-artifacts/
+/.deploy/

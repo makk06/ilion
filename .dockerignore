@@ -1,0 +1,15 @@
+**
+!tourist_congestion_backend/
+!tourist_congestion_backend/**
+tourist_congestion_backend/.venv
+tourist_congestion_backend/.env*
+tourist_congestion_backend/**/__pycache__
+tourist_congestion_backend/**/*.pyc
+tourist_congestion_backend/*.sqlite3*
+tourist_congestion_backend/.data-worker*
+tourist_congestion_backend/staticfiles
+tourist_congestion_backend/media
+tourist_congestion_backend/**/*.log
+tourist_congestion_backend/docs
+tourist_congestion_backend/.pytest_cache
+tourist_congestion_backend/.coverage

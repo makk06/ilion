@@ -1,0 +1,2166 @@
+{
+  "selection_version": "pilot-1",
+  "per_city": 120,
+  "entries": [
+    {
+      "external_id": "2992823",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "1849416",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "2554814",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "2768087",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "4025882",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "685544",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "126081",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "2834026",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "566822",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "3076754",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "4008789",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "851955",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "127744",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "129894",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "3495841",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "2718799",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "4026863",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "1877081",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "2752545",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "2994661",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "3383832",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "3074766",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "2910573",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "2623617",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "3014435",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "130750",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "3018117",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "131143",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "2893654",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "850093",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "129395",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "130494",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "3512205",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "1839630",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "4026815",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "2831961",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "3082405",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "3082429",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "4070216",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "3082411",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "4008911",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "4095956",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "1957694",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "3074669",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "4088149",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "2726803",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "132190",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "133313",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "126435",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "770036",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "3108284",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "1839477",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "4012996",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "2755466",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "126512",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "129811",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "2601364",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "2778454",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "4012722",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "2944630",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "229912",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "4063161",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "2048902",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "2825115",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "4011281",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "2860782",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "2414812",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "130745",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "140930",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "1840777",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "4026862",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "1984252",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "2733864",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "3386145",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "3489432",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "2753381",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "3305871",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "2871478",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "3549017",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "2763856",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "4103719",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "131715",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "2906039",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "844414",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "988441",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "1220821",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "3014969",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "2806561",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "4009589",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "2781431",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "781031",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "3519019",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "3368863",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "2553819",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "2578284",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "2989022",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "3064821",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "3544248",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "3576410",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "2557807",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "132576",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "133796",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "4058180",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "2048059",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "2371631",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "3030978",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "132159",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "404139",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "126508",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "815197",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "2615461",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "663785",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "4012705",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "1321191",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "127004",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "130622",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "2704473",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "2704645",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "2914191",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "2786766",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "1960087",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "130088",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "1690237",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "131106",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "4026850",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "655015",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "2946113",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "719514",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "2802077",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "2773417",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "3307443",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "2903776",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "2679008",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "3345515",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "2818494",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "1358310",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "2910394",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "4106709",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "126438",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "130193",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "506616",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "2806554",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "4026814",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "4068781",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "3425093",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "130348",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "4097339",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "3082446",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "2900922",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "250564",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "1960620",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "3345026",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "3115722",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "3422573",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "2924430",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "2485840",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "4054639",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "2717330",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "141736",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "1841003",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "1890343",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "404187",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "1604652",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "4055459",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "2648460",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "131138",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "132205",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "1120046",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "3083459",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "2782714",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "2523149",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "2789488",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "4011285",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "1805656",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "315926",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "2778915",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "3546882",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "2726704",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "4026828",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "2853982",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "2754735",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "3423015",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "2759788",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "2733973",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "4011645",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "581825",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "3421909",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "3507960",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "2868776",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "131145",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "4011182",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "850041",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "127283",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "1939093",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "3554702",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "2806555",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "2931671",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "2863719",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "4091320",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "1389382",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "4099133",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "131712",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "2893657",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "4108662",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "127488",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "3083767",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "2952109",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "3074661",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "132187",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "1312452",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "3081317",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "2811110",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "3482354",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "1839451",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "992261",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "1986683",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "1604697",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "129735",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "2740046",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "131901",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "4025892",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "2543919",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "126108",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "1918263",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "3514951",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "2381567",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "2916567",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "2860851",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "126462",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "2852695",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "3349628",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "131268",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "2905452",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "1861336",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "2779508",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "596511",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "3093268",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "131315",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "4026747",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "2856741",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "2994179",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "1395604",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "4056794",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "3060992",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "4027075",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "2807806",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "1620936",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "3030351",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "1834279",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "2820293",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "4026816",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "664223",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "2852296",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "3082423",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "3548994",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "131333",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "2911133",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "2946079",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "126857",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "130153",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "3559571",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "131452",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "4008103",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "1963085",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "2798131",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "2931892",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "1019773",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "1839491",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "3306940",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "2871879",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "4080919",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "129917",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "3497454",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "1101088",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "2505619",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "2544579",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "2783306",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "3028653",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "4055637",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "3009050",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "2923684",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "851286",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "129384",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "4057731",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "3011941",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "782905",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "3306134",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "2863893",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "126525",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "2751869",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "2989981",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "131903",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "2908241",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "133328",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "1046349",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "129816",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "4109305",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "3488597",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "4008065",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "841730",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "2822432",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "129767",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "2434545",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "131836",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "3307329",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "4060735",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "2946527",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "699241",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "142193",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "2783318",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "4012532",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "2907163",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "홍대"
+    },
+    {
+      "external_id": "1960614",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "3064803",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "2486085",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "131943",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "4011267",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "132807",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "남포"
+    },
+    {
+      "external_id": "3069080",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "2791473",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "1074568",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "2710029",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "2902472",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "2758836",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "성산"
+    },
+    {
+      "external_id": "1364932",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "130302",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "2560317",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "2778449",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "4012737",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "562425",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "광화문"
+    },
+    {
+      "external_id": "3027780",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "1748157",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "4077756",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "3065360",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "995455",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "4095461",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "해운대"
+    },
+    {
+      "external_id": "2778044",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "2834656",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "3399432",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "1755350",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "2909701",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "2899568",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "제주시"
+    },
+    {
+      "external_id": "2782132",
+      "city": "seoul",
+      "category": "관광지",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "3080847",
+      "city": "seoul",
+      "category": "문화시설",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "4094595",
+      "city": "seoul",
+      "category": "축제/공연/행사",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "2647687",
+      "city": "seoul",
+      "category": "레포츠",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "3305313",
+      "city": "seoul",
+      "category": "쇼핑",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "232215",
+      "city": "seoul",
+      "category": "음식점",
+      "anchor": "강남"
+    },
+    {
+      "external_id": "3093625",
+      "city": "busan",
+      "category": "관광지",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "3014434",
+      "city": "busan",
+      "category": "문화시설",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "1553601",
+      "city": "busan",
+      "category": "축제/공연/행사",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "2708019",
+      "city": "busan",
+      "category": "레포츠",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "4008066",
+      "city": "busan",
+      "category": "쇼핑",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "2865975",
+      "city": "busan",
+      "category": "음식점",
+      "anchor": "서면"
+    },
+    {
+      "external_id": "2767778",
+      "city": "jeju",
+      "category": "관광지",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "130682",
+      "city": "jeju",
+      "category": "문화시설",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "921281",
+      "city": "jeju",
+      "category": "축제/공연/행사",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "3031552",
+      "city": "jeju",
+      "category": "레포츠",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "4026818",
+      "city": "jeju",
+      "category": "쇼핑",
+      "anchor": "서귀포"
+    },
+    {
+      "external_id": "4092010",
+      "city": "jeju",
+      "category": "음식점",
+      "anchor": "서귀포"
+    }
+  ]
+}

@@ -2,7 +2,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from .exceptions import ExternalAPIError
+from .exceptions import ExternalAPIAuthError, ExternalAPIError, ExternalAPIQuotaError
 
 
 DEFAULT_TIMEOUT_SECONDS = 10
@@ -10,9 +10,9 @@ DEFAULT_TIMEOUT_SECONDS = 10
 
 def build_retrying_session():
     retry = Retry(
-        total=3,
-        connect=3,
-        read=3,
+        total=0,
+        connect=0,
+        read=0,
         backoff_factor=0.5,
         status_forcelist=(429, 500, 502, 503, 504),
         allowed_methods=('GET',),
@@ -43,6 +43,13 @@ def get_json(session, url, *, params=None, timeout=None, provider):
     try:
         response.raise_for_status()
     except requests.RequestException:
+        if response.status_code in (401, 403):
+            header = (payload or {}).get('OpenAPI_ServiceResponse', {}).get('cmmMsgHeader', {}) if isinstance(payload, dict) else {}
+            code = header.get('returnReasonCode')
+            suffix = f', code {code}' if code and str(code).isdigit() else ''
+            raise ExternalAPIAuthError(f'{provider} rejected credentials (HTTP {response.status_code}{suffix})') from None
+        if response.status_code == 429:
+            raise ExternalAPIQuotaError(f'{provider} call quota exceeded') from None
         detail = extract_error_detail(payload)
         suffix = f', {detail}' if detail else ''
         raise ExternalAPIError(

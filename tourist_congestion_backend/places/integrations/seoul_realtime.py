@@ -100,6 +100,9 @@ def normalize_seoul_population(payload, *, fallback_area):
             or result.get('message')
             or 'no population data'
         )
+        if code == 'INFO-100':
+            from .exceptions import ExternalAPIAuthError
+            raise ExternalAPIAuthError('Seoul API rejected credentials (INFO-100)')
         raise ExternalAPIError(f'Seoul API error {code}: {message}')
 
     observed_at = _parse_observed_at(record.get('PPLTN_TIME'))

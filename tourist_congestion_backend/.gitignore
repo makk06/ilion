@@ -8,6 +8,7 @@ __pycache__/
 !.env.example
 
 db.sqlite3
+.data-worker.lock
 media/
 staticfiles/
 

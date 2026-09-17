@@ -4,6 +4,7 @@ from django.db import transaction
 
 from places.integrations.exceptions import ExternalAPIError
 from places.models import ExternalSource, PlaceInfo
+from places.services.classification import classify_place
 
 
 @dataclass
@@ -56,17 +57,23 @@ class TourPlaceDetailSyncService:
     @staticmethod
     @transaction.atomic
     def _upsert_info(place, record):
-        _, created = PlaceInfo.objects.update_or_create(
+        existing = PlaceInfo.objects.filter(place=place).first()
+        # A partial detail response must not erase previously confirmed fields.
+        def retained(field, value):
+            return value or (getattr(existing, field) if existing else '')
+
+        info, created = PlaceInfo.objects.update_or_create(
             place=place,
             defaults={
-                'description': record.description,
-                'phone': record.phone[:255],
-                'homepage_url': record.homepage_url[:1000],
-                'first_image_url': record.first_image_url[:1000],
-                'opening_hours': record.opening_hours,
-                'holiday_info': record.holiday_info,
+                'description': retained('description', record.description),
+                'phone': retained('phone', record.phone[:255]),
+                'homepage_url': retained('homepage_url', record.homepage_url[:1000]),
+                'first_image_url': retained('first_image_url', record.first_image_url[:1000]),
+                'opening_hours': retained('opening_hours', record.opening_hours),
+                'holiday_info': retained('holiday_info', record.holiday_info),
                 'merged_summary_source': ExternalSource.TOUR_API,
                 'raw_data': record.raw_data,
             },
         )
+        classify_place(place, info)
         return created

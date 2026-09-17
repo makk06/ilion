@@ -13,6 +13,9 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
+
+from django.core.exceptions import ImproperlyConfigured
 
 from dotenv import load_dotenv
 
@@ -32,6 +35,12 @@ SECRET_KEY = os.environ.get(
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() == 'true'
+if not DEBUG and (SECRET_KEY.startswith('django-insecure-') or len(SECRET_KEY) < 50):
+    raise ImproperlyConfigured('Set a production DJANGO_SECRET_KEY of at least 50 characters.')
+
+APP_BASE_URL = os.environ.get('APP_BASE_URL', '').rstrip('/')
+STORAGE_DIR = Path(os.environ.get('STORAGE_DIR') or BASE_DIR)
+DATA_WORKER_ENABLED = os.environ.get('DATA_WORKER_ENABLED', 'false').lower() == 'true'
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -41,6 +50,18 @@ ALLOWED_HOSTS = [
     ).split(',')
     if host.strip()
 ]
+if APP_BASE_URL:
+    ALLOWED_HOSTS.append(urlsplit(APP_BASE_URL).hostname)
+CSRF_TRUSTED_ORIGINS = [APP_BASE_URL] if APP_BASE_URL else []
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_REDIRECT_EXEMPT = [r'^healthz$']
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+# The managed edge contract covers this exact hostname, not arbitrary child hosts
+# or browser preload enrollment. Keep all other deployment warnings actionable.
+SILENCED_SYSTEM_CHECKS = ['security.W005', 'security.W021']
 
 
 # Application definition
@@ -54,7 +75,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
+    'config',
     'places.apps.PlacesConfig',
+    'recommendations',
     'users.apps.UsersConfig',
 ]
 
@@ -63,6 +86,7 @@ AUTH_USER_MODEL = 'users.User'
 MIDDLEWARE = [
     'config.cors.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -97,8 +121,8 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.environ.get('DJANGO_DB_PATH', str(BASE_DIR / 'db.sqlite3')),
-        'OPTIONS': {'timeout': 20},
+        'NAME': os.environ.get('DJANGO_DB_PATH', str(STORAGE_DIR / 'db.sqlite3')),
+        'OPTIONS': {'timeout': 20, 'transaction_mode': 'IMMEDIATE'},
     }
 }
 
@@ -141,8 +165,9 @@ CROWD_DISABLE_TREND_HORIZONS = [int(v) for v in os.environ.get('CROWD_DISABLE_TR
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = STORAGE_DIR / 'media'
 CORS_ALLOWED_ORIGINS = [value.strip() for value in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if value.strip()]
 
 
@@ -168,3 +193,29 @@ SIMPLE_JWT = {
 
 # Google OAuth (구글 로그인 ID Token 검증용)
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+
+# Explainable starting weights and weather thresholds; adjust after product validation.
+RECOMMENDATION_WEIGHTS = {
+    'distance': 0.30, 'category': 0.15, 'crowd': 0.20,
+    'weather': 0.25, 'indoor_outdoor': 0.10,
+}
+CROWD_FRESH_MINUTES = 15
+CROWD_FULL_WEIGHT_MINUTES = 30
+CROWD_MAX_AGE_MINUTES = 45
+CROWD_DELAYED_WEIGHT_FACTOR = 0.5
+WEATHER_THRESHOLDS = {'wind_mps': 9.0, 'hot_c': 33.0, 'cold_c': -10.0}
+# A development freshness allowance: KMA village forecasts are issued every
+# three hours. One missed issue is tolerated; fetched_at never extends it.
+WEATHER_MAX_ISSUE_AGE_HOURS = 5
+# This is a ranking distance scale, independent of the request's hard radius.
+RECOMMENDATION_DISTANCE_SCALE_KM = 2.5
+# Retain a real distance cost beyond the close neighborhood, even when the
+# request's hard radius is large (for example 100 km).
+RECOMMENDATION_DISTANCE_GUARD_FREE_KM = 5.0
+RECOMMENDATION_DISTANCE_GUARD_SCALE_KM = 20.0
+RECOMMENDATION_NAME_RULE_WEIGHT_FACTOR = 0.5
+RECOMMENDATION_DESCRIPTION_RULE_WEIGHT_FACTOR = 0.75
+RECOMMENDATION_LUNA_VALIDATED_WEIGHT_FACTOR = 0.5
+RECOMMENDATION_CONTEXT_CACHE_SECONDS = max(
+    0, min(300, int(os.environ.get('RECOMMENDATION_CONTEXT_CACHE_SECONDS', '60')))
+)

@@ -3,6 +3,12 @@
 전국 장소 데이터·자체 예상 혼잡도와 서울 영역의 최신 관측 혼잡도를 조회하는
 API입니다. 모든 응답은 아래 공통 형식을 사용합니다.
 
+현재 운영 서버 연동과 `mvp-7` 추천의 전체 사용법은 [프론트엔드 전달 가이드](./FRONTEND_HANDOFF.md)를 먼저 확인합니다. 이 문서 아래의 직접 수집 명령은 백엔드 수동 점검용이며, 프론트 연동을 위해 실행하지 않습니다. 실제 수집은 Pi 운영 워커로 일원화합니다.
+
+전국 최대 10개 추천의 입력·출력과 날씨 최신성은 [추천 MVP 계약](./docs/recommendation-mvp.md)을 참고합니다.
+현재 추천 버전 `mvp-7`의 날씨 노출 필드는 [날씨 노출 구현·고정 평가](./docs/weather-exposure-mvp7-2026-09-14.md)를 우선합니다. `place.weather_exposure`의 `high/medium/low/unknown`은 주활동에 대한 정책상 서열형 추정이며 실측 비율이 아닙니다. `indoor_outdoor` 호환 라벨과 별도입니다. 공식 TourAPI 유형만으로 날씨 점수에 약하게 기여할 수 있으나 실내 필수·날씨 근거 필수 조건의 확인 근거는 아닙니다. `source`, `reason`, `conflict`, `weight_factor`, `type_code`, `persisted`를 함께 표시해야 합니다.
+추천의 실내외 라벨은 원시 `indoor_outdoor`만으로 확정하지 않습니다. `place.indoor_outdoor_evidence_quality`가 `inferred_from_description`이면 공개 설명의 주활동·장소 범위 규칙 추정, `inferred_from_luna`이면 AI 추정이고, `stale_auto_evidence`이면 현재 입력과 맞지 않는 자동 근거입니다. 엄격한 `required_indoor_outdoor`는 수동 또는 명확한 설명 규칙만 허용하고 AI 추정은 제외합니다. [현재 분류 운영·평가 계약](./docs/place-classification-context-evaluation-2026-09-14.md)을 참고합니다.
+
 ```json
 {
   "success": true,
@@ -33,8 +39,8 @@ GET /api/places
 | `page_size` | `20` | 페이지당 개수. 최대 100 |
 
 `crowd_level`은 `relaxed`, `normal`, `busy`, `crowded`, `unknown` 중 하나입니다.
-혼잡도 필터는 과거 관측 전체가 아니라 장소에 연결된 가장 최근 관측값에
-적용됩니다.
+혼잡도 필터는 장소에 연결된 가장 최근 관측값이 45분 이내인 경우에만 적용됩니다.
+목록·상세의 `latest_crowd`에는 관측 15분 초과 `is_stale`, 30~45분 `is_delayed`, 45분 초과 또는 미래 관측 `is_expired`를 함께 반환합니다. 지연 관측은 추천에서 혼잡 가중치를 절반으로 낮추며 `quiet_required`의 근거로 쓰지 않습니다. 만료 관측은 추천 점수에서 제외됩니다.
 
 ### 응답 예시
 
@@ -66,6 +72,9 @@ GET /api/places
           "population_min": 12000,
           "population_max": 14000,
           "observed_at": "2026-08-17T12:00:00+09:00",
+          "is_stale": false,
+          "is_delayed": false,
+          "is_expired": false,
           "is_replaced": false
         }
       }

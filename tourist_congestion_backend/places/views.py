@@ -1,13 +1,13 @@
 import math
+from datetime import timedelta
 from functools import wraps
 
-from django.db import OperationalError
 from django.conf import settings
+from django.db import OperationalError
 from django.db.models import Exists, OuterRef, Q, Subquery
 from django.http import JsonResponse
-from django.views.decorators.http import require_GET
 from django.utils import timezone
-from datetime import timedelta
+from django.views.decorators.http import require_GET
 
 from places.models import CrowdData, Place, PlaceSource, PlaceCrowdProfile
 from places.integrations.tour_api import _first_text
@@ -177,6 +177,7 @@ def _visible_places():
 def _latest_crowd(place):
     if place.latest_crowd_id is None:
         return None
+    age_seconds = (timezone.now() - place.latest_crowd_observed_at).total_seconds()
     return {
         'area_id': place.latest_crowd_area_id,
         'area_external_id': place.latest_crowd_area_external_id,
@@ -188,6 +189,9 @@ def _latest_crowd(place):
         'population_min': place.latest_crowd_population_min,
         'population_max': place.latest_crowd_population_max,
         'observed_at': place.latest_crowd_observed_at,
+        'is_stale': age_seconds > settings.CROWD_FRESH_MINUTES * 60,
+        'is_delayed': settings.CROWD_FULL_WEIGHT_MINUTES * 60 < age_seconds <= settings.CROWD_MAX_AGE_MINUTES * 60,
+        'is_expired': age_seconds < 0 or age_seconds > settings.CROWD_MAX_AGE_MINUTES * 60,
         'is_replaced': place.latest_crowd_is_replaced,
         'is_demo': bool((place.latest_crowd_raw_data or {}).get('dev_seed')),
     }
@@ -220,6 +224,8 @@ def _serialize_place(place, *, detail=False, distance_km=None):
     if detail:
         data.update(
             {
+                'indoor_outdoor_source': place.indoor_outdoor_source or None,
+                'indoor_outdoor_evidence': place.indoor_outdoor_evidence or None,
                 'open_status': place.open_status,
                 'info': (
                     {
@@ -328,7 +334,9 @@ def place_list(request):
     except ValueError as exc:
         return _error(str(exc))
     if crowd_level:
-        queryset = queryset.filter(latest_crowd_level=crowd_level)
+        queryset = queryset.filter(latest_crowd_level=crowd_level,
+            latest_crowd_observed_at__gte=timezone.now() - timedelta(minutes=settings.CROWD_MAX_AGE_MINUTES),
+            latest_crowd_observed_at__lte=timezone.now())
 
     if estimate_level:
         queryset = _filter_estimates(queryset, estimate_level)
@@ -401,7 +409,9 @@ def nearby_places(request):
     if category:
         queryset = queryset.filter(category__icontains=category)
     if crowd_level:
-        queryset = queryset.filter(latest_crowd_level=crowd_level)
+        queryset = queryset.filter(latest_crowd_level=crowd_level,
+            latest_crowd_observed_at__gte=timezone.now() - timedelta(minutes=settings.CROWD_MAX_AGE_MINUTES),
+            latest_crowd_observed_at__lte=timezone.now())
 
     latitude_min, latitude_max, longitude_min, longitude_max = (
         _nearby_bounding_box(latitude, longitude, radius_km)

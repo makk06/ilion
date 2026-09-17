@@ -7,3 +7,5 @@ requests==2.34.2
 Pillow==12.3.0
 Shapely==2.1.2
 pyshp==2.3.1
+gunicorn==26.2.0
+whitenoise==6.12.0

@@ -13,6 +13,7 @@ class Place(models.Model):
         UNKNOWN = 'unknown', 'Unknown'
         INDOOR = 'indoor', 'Indoor'
         OUTDOOR = 'outdoor', 'Outdoor'
+        MIXED = 'mixed', 'Mixed'
 
     class OpenStatus(models.TextChoices):
         OPEN = 'OPEN', 'Open'
@@ -38,6 +39,8 @@ class Place(models.Model):
         choices=IndoorOutdoor,
         default=IndoorOutdoor.UNKNOWN,
     )
+    indoor_outdoor_source = models.CharField(max_length=30, blank=True)
+    indoor_outdoor_evidence = models.CharField(max_length=255, blank=True)
     open_status = models.CharField(
         max_length=6,
         choices=OpenStatus,
@@ -53,6 +56,11 @@ class Place(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=('latitude', 'longitude')),
+        ]
 
     def __str__(self):
         return self.name
@@ -143,6 +151,7 @@ class PlaceSource(models.Model):
         ]
         indexes = [
             models.Index(fields=('source', 'match_status')),
+            models.Index(fields=('place', 'match_status')),
         ]
 
     def __str__(self):
@@ -275,3 +284,6 @@ from .crowd_models import (  # noqa: E402,F401 -- keep the existing places app/m
     CalendarDay, CollectorState, CrowdEstimate, ForecastEvaluation, HistoricalBaseline,
     HistoricalSample, PlaceCrowdProfile, TourEvent, TransitObservation, WeatherSnapshot,
 )
+from .weather_models import WeatherForecast  # noqa: E402,F401
+from .job_models import DataJob, ProviderCallBudget  # noqa: E402,F401
+from .classification_models import PlaceClassificationEvidence, PlaceClassificationAttempt, PlaceWeatherExposure  # noqa: E402,F401
