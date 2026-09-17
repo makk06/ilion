@@ -1,3 +1,6 @@
 .integration-venv/
 .integration-artifacts/
 /.deploy/
+
+# 보안 결함 상세 — 시정 완료 전까지 저장소에 포함하지 않음
+docs/privacy/security-findings.md
