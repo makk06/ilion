@@ -407,3 +407,8 @@ class FeedbackTests(TestCase):
         self.assertEqual(response.status_code, 200)
         feedbacks = response.json()['data']['feedbacks']
         self.assertEqual([item['id'] for item in feedbacks], [newer.id, older.id])
+
+        Feedback.objects.filter(id__in=[older.id, newer.id]).update(created_at=older.created_at)
+        response = self.client.get(reverse('feedback-list-create'))
+        feedbacks = response.json()['data']['feedbacks']
+        self.assertEqual([item['id'] for item in feedbacks], [newer.id, older.id])

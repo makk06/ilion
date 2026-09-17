@@ -227,7 +227,7 @@ class FeedbackListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        feedbacks = Feedback.objects.filter(user=request.user).order_by('-created_at')
+        feedbacks = Feedback.objects.filter(user=request.user).order_by('-created_at', '-id')
         return success_response({'feedbacks': FeedbackSerializer(feedbacks, many=True).data})
 
     def post(self, request):
