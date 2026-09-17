@@ -1,10 +1,11 @@
 from datetime import date
 
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from places.models import Place
 
+from .utils import hash_email_for_withdrawal
 from .models import (AnonymousActor, Favorite, Feedback, RecentPlace, Review, ReviewLike,
                      User, WithdrawalReason, WithdrawnEmailHash)
 
@@ -95,3 +96,32 @@ class UserXorActorConstraintTests(TestCase):
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 Favorite.objects.create(actor=self.actor, place=self.place)
+
+
+class EmailHashTests(TestCase):
+    @override_settings(WITHDRAWAL_HASH_KEY='k' * 50)
+    def test_hash_is_case_and_space_insensitive(self):
+        self.assertEqual(
+            hash_email_for_withdrawal('  User@Example.COM '),
+            hash_email_for_withdrawal('user@example.com'),
+        )
+
+    @override_settings(WITHDRAWAL_HASH_KEY='k' * 50)
+    def test_hash_is_sixty_four_hex_characters(self):
+        value = hash_email_for_withdrawal('user@example.com')
+        self.assertEqual(len(value), 64)
+        int(value, 16)
+
+    def test_hash_depends_on_the_secret_key(self):
+        # 키 없이 sha256만 쓰면 이메일 후보를 전수 대입해 복원할 수 있다.
+        with override_settings(WITHDRAWAL_HASH_KEY='a' * 50):
+            first = hash_email_for_withdrawal('user@example.com')
+        with override_settings(WITHDRAWAL_HASH_KEY='b' * 50):
+            second = hash_email_for_withdrawal('user@example.com')
+        self.assertNotEqual(first, second)
+
+    @override_settings(WITHDRAWAL_HASH_KEY='k' * 50)
+    def test_hash_is_not_a_plain_sha256(self):
+        import hashlib
+        plain = hashlib.sha256(b'user@example.com').hexdigest()
+        self.assertNotEqual(hash_email_for_withdrawal('user@example.com'), plain)
