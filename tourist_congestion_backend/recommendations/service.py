@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from heapq import nsmallest
 import math
 from threading import Lock
 from time import monotonic
@@ -45,6 +46,7 @@ DEFAULT_CATEGORY_REASONS = {
     '음식점': '주변 음식점으로 등록된 장소입니다.',
     '쇼핑': '주변 쇼핑 장소로 등록된 곳입니다.',
 }
+SCORE_KEYS = ('distance', 'category', 'crowd', 'weather', 'indoor_outdoor')
 
 
 _CANDIDATE_FIELDS = (
@@ -104,8 +106,10 @@ class _CandidateEvaluation:
     weather_fit: object
     weather_factors: list
     weather_status: str
-    raw_scores: dict
-    evidence_factors: dict
+    raw_scores: tuple
+    evidence_factors: tuple
+    base_score: float = 0
+    distance_guard: float = 1
     rank_score: float = 0
 
 
@@ -333,7 +337,6 @@ def clear_recommendation_context_cache():
 
 def _candidate_context_key(criteria, visit_at):
     return (
-        float(criteria['radius_km']),
         visit_at.astimezone(KST).date().isoformat(),
         tuple(sorted(criteria.get('required_categories') or ())),
         criteria.get('required_indoor_outdoor') or '',
@@ -378,11 +381,16 @@ def _build_candidate_context(criteria, visit_at, *, reuse_km=0):
         if weather_profiles[place.id].factor else None
         for _, place in candidates
     }
+    context_candidates = [
+        (distance, place, math.radians(float(place.latitude)),
+         math.radians(float(place.longitude)))
+        for distance, place in candidates
+    ]
     return _CandidateContext(
         center_latitude=float(criteria['latitude']),
         center_longitude=float(criteria['longitude']),
         search_radius_km=float(expanded_criteria['radius_km']),
-        candidates=candidates,
+        candidates=context_candidates,
         classification_qualities=classification_qualities,
         weather_profiles=weather_profiles,
         grids=grids,
@@ -445,12 +453,23 @@ def _request_candidates(context, criteria):
     if latitude == context.center_latitude and longitude == context.center_longitude:
         return [
             (distance, place)
-            for distance, place in context.candidates
+            for distance, place, _, _ in context.candidates
             if distance <= radius
         ]
+    latitude_radians = math.radians(latitude)
+    longitude_radians = math.radians(longitude)
+    latitude_cosine = math.cos(latitude_radians)
     candidates = []
-    for _, place in context.candidates:
-        distance = _haversine_km(latitude, longitude, place)
+    for _, place, place_latitude, place_longitude in context.candidates:
+        latitude_delta = place_latitude - latitude_radians
+        longitude_delta = place_longitude - longitude_radians
+        haversine = (
+            math.sin(latitude_delta / 2) ** 2
+            + latitude_cosine
+            * math.cos(place_latitude)
+            * math.sin(longitude_delta / 2) ** 2
+        )
+        distance = 2 * EARTH_RADIUS_KM * math.asin(min(1, math.sqrt(haversine)))
         if distance <= radius:
             candidates.append((distance, place))
     candidates.sort(key=lambda item: (item[0], item[1].id))
@@ -594,28 +613,29 @@ def recommend(criteria, user=None, *, now=None, supplement=True, forecast_lookup
             crowd_fit = DEFAULT_CROWD_RISK[crowd['level']] if crowd else None
         else:
             crowd_fit = CROWD_FIT[criteria['crowd_level']][crowd['level']] if crowd else None
-        raw_scores = {
-            'distance': 100 / (1 + distance / settings.RECOMMENDATION_DISTANCE_SCALE_KM),
-            'category': (100 if place.category in preferred_categories else 0)
+        raw_scores = (
+            100 / (1 + distance / settings.RECOMMENDATION_DISTANCE_SCALE_KM),
+            (100 if place.category in preferred_categories else 0)
             if preferred_categories else DEFAULT_TRAVEL_CATEGORY_FIT[place.category],
-            'crowd': crowd_fit,
-            'weather': weather_fit,
-            'indoor_outdoor': (
+            crowd_fit,
+            weather_fit,
+            (
                 100 if place.indoor_outdoor == criteria['indoor_outdoor'] else
                 60 if place.indoor_outdoor == 'mixed' else 0
             ) if criteria.get('indoor_outdoor') and classification_factor else None,
-        }
-        evidence_factors = {
-            'distance': 1, 'category': 1,
-            'crowd': crowd['score_weight_factor'] if crowd else 0,
-            'weather': profile.factor,
-            'indoor_outdoor': classification_factor,
-        }
+        )
+        evidence_factors = (
+            1,
+            1,
+            crowd['score_weight_factor'] if crowd else 0,
+            profile.factor,
+            classification_factor,
+        )
         crowd_can_rank |= crowd_fit is not None and (
             criteria['crowd_level'] != 'any' or crowd_fit < NEUTRAL_RANKING_BASELINE
         )
         weather_can_rank |= weather_fit is not None
-        indoor_outdoor_can_rank |= raw_scores['indoor_outdoor'] is not None
+        indoor_outdoor_can_rank |= raw_scores[4] is not None
         evaluations.append(_CandidateEvaluation(
             distance=distance,
             place=place,
@@ -629,31 +649,34 @@ def recommend(criteria, user=None, *, now=None, supplement=True, forecast_lookup
             raw_scores=raw_scores,
             evidence_factors=evidence_factors,
         ))
-    ranking_keys = ['distance', 'category']
+    ranking_indices = [0, 1]
     if crowd_can_rank:
-        ranking_keys.append('crowd')
+        ranking_indices.append(2)
     if criteria.get('weather_aware', True) and weather_can_rank:
-        ranking_keys.append('weather')
+        ranking_indices.append(3)
     if criteria.get('indoor_outdoor') and indoor_outdoor_can_rank:
-        ranking_keys.append('indoor_outdoor')
+        ranking_indices.append(4)
+    ranking_keys = [SCORE_KEYS[index] for index in ranking_indices]
     weights = settings.RECOMMENDATION_WEIGHTS
     ranking_total = sum(weights[key] for key in ranking_keys)
     for evaluation in evaluations:
         raw_scores = evaluation.raw_scores
         factors = evaluation.evidence_factors
-        effective_scores = {
-            key: (NEUTRAL_RANKING_BASELINE + (value - NEUTRAL_RANKING_BASELINE) * factors[key])
-            if value is not None else None
-            for key, value in raw_scores.items()
-        }
-        score = sum(weights[key] * (
-            effective_scores[key] if effective_scores[key] is not None else NEUTRAL_RANKING_BASELINE
-        ) for key in ranking_keys) / ranking_total
+        score = sum(
+            weights[SCORE_KEYS[index]] * (
+                NEUTRAL_RANKING_BASELINE
+                + (raw_scores[index] - NEUTRAL_RANKING_BASELINE) * factors[index]
+                if raw_scores[index] is not None else NEUTRAL_RANKING_BASELINE
+            )
+            for index in ranking_indices
+        ) / ranking_total
         guard = 1 / (1 + max(0, evaluation.distance - settings.RECOMMENDATION_DISTANCE_GUARD_FREE_KM)
                      / settings.RECOMMENDATION_DISTANCE_GUARD_SCALE_KM)
+        evaluation.base_score = score
+        evaluation.distance_guard = guard
         evaluation.rank_score = score * guard
     crowd_ranking_requested = criteria['crowd_level'] != 'any'
-    evaluations.sort(key=lambda evaluation: (
+    ranked = nsmallest(criteria['limit'], evaluations, key=lambda evaluation: (
         -evaluation.rank_score,
         -(evaluation.crowd['observed_at'].timestamp()
           if crowd_ranking_requested and evaluation.crowd else 0),
@@ -661,20 +684,19 @@ def recommend(criteria, user=None, *, now=None, supplement=True, forecast_lookup
         evaluation.place.id,
     ))
     items = []
-    for rank, evaluation in enumerate(evaluations[:criteria['limit']], 1):
-        raw_scores = evaluation.raw_scores
-        factors = evaluation.evidence_factors
+    for rank, evaluation in enumerate(ranked, 1):
+        raw_score_values = evaluation.raw_scores
+        factor_values = evaluation.evidence_factors
+        raw_scores = dict(zip(SCORE_KEYS, raw_score_values))
+        factors = dict(zip(SCORE_KEYS, factor_values))
         effective_scores = {
             key: (NEUTRAL_RANKING_BASELINE + (value - NEUTRAL_RANKING_BASELINE) * factors[key])
             if value is not None else None
             for key, value in raw_scores.items()
         }
         contributors = [key for key in ranking_keys if raw_scores[key] is not None]
-        score = sum(weights[key] * (
-            effective_scores[key] if effective_scores[key] is not None else NEUTRAL_RANKING_BASELINE
-        ) for key in ranking_keys) / ranking_total
-        guard = 1 / (1 + max(0, evaluation.distance - settings.RECOMMENDATION_DISTANCE_GUARD_FREE_KM)
-                     / settings.RECOMMENDATION_DISTANCE_GUARD_SCALE_KM)
+        score = evaluation.base_score
+        guard = evaluation.distance_guard
         place = evaluation.place
         profile = evaluation.profile
         forecast = evaluation.forecast
