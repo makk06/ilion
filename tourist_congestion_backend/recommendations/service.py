@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import math
 from threading import Lock
 from time import monotonic
 
@@ -9,7 +10,7 @@ from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
 from places.models import CrowdData, Place, PlaceCrowdArea, PlaceInfo, PlaceSource
-from places.views import _haversine_km, _nearby_bounding_box
+from places.views import EARTH_RADIUS_KM, _haversine_km, _nearby_bounding_box
 from places.services.weather import forecast_for, forecasts_for, grid_for, latest_available_issue
 from places.services.jobs import enqueue
 from places.services.weather import KST
@@ -83,6 +84,9 @@ class PreparedRecommendations:
 
 @dataclass(slots=True)
 class _CandidateContext:
+    center_latitude: float
+    center_longitude: float
+    search_radius_km: float
     candidates: list
     classification_qualities: dict
     weather_profiles: dict
@@ -329,8 +333,6 @@ def clear_recommendation_context_cache():
 
 def _candidate_context_key(criteria, visit_at):
     return (
-        float(criteria['latitude']),
-        float(criteria['longitude']),
         float(criteria['radius_km']),
         visit_at.astimezone(KST).date().isoformat(),
         tuple(sorted(criteria.get('required_categories') or ())),
@@ -338,8 +340,36 @@ def _candidate_context_key(criteria, visit_at):
     )
 
 
-def _build_candidate_context(criteria, visit_at):
-    candidates, classification_qualities = _load_candidates(criteria, visit_at)
+def _coordinate_distance_km(latitude, longitude, other_latitude, other_longitude):
+    latitude_radians = math.radians(latitude)
+    other_latitude_radians = math.radians(other_latitude)
+    latitude_delta = other_latitude_radians - latitude_radians
+    longitude_delta = math.radians(other_longitude - longitude)
+    haversine = (
+        math.sin(latitude_delta / 2) ** 2
+        + math.cos(latitude_radians)
+        * math.cos(other_latitude_radians)
+        * math.sin(longitude_delta / 2) ** 2
+    )
+    return 2 * EARTH_RADIUS_KM * math.asin(min(1, math.sqrt(haversine)))
+
+
+def _context_covers(context, criteria):
+    center_distance = _coordinate_distance_km(
+        context.center_latitude,
+        context.center_longitude,
+        float(criteria['latitude']),
+        float(criteria['longitude']),
+    )
+    return center_distance + float(criteria['radius_km']) <= context.search_radius_km + 1e-9
+
+
+def _build_candidate_context(criteria, visit_at, *, reuse_km=0):
+    expanded_criteria = {
+        **criteria,
+        'radius_km': float(criteria['radius_km']) + reuse_km,
+    }
+    candidates, classification_qualities = _load_candidates(expanded_criteria, visit_at)
     weather_profiles = _profiles_for_candidates(candidates)
     for _, place in candidates:
         classification_qualities.setdefault(place.id, _classification_quality(place))
@@ -349,6 +379,9 @@ def _build_candidate_context(criteria, visit_at):
         for _, place in candidates
     }
     return _CandidateContext(
+        center_latitude=float(criteria['latitude']),
+        center_longitude=float(criteria['longitude']),
+        search_radius_km=float(expanded_criteria['radius_km']),
         candidates=candidates,
         classification_qualities=classification_qualities,
         weather_profiles=weather_profiles,
@@ -360,33 +393,68 @@ def _candidate_context(criteria, visit_at):
     timeout = settings.RECOMMENDATION_CONTEXT_CACHE_SECONDS
     if timeout <= 0:
         return _build_candidate_context(criteria, visit_at)
-    key = _candidate_context_key(criteria, visit_at)
+    scope = _candidate_context_key(criteria, visit_at)
+    build_key = (
+        scope,
+        round(float(criteria['latitude']), 4),
+        round(float(criteria['longitude']), 4),
+    )
     now_monotonic = monotonic()
     with _CONTEXT_CACHE_LOCK:
-        cached = _CONTEXT_CACHE.get(key)
-        if cached and now_monotonic - cached[0] < timeout:
-            _CONTEXT_CACHE.move_to_end(key)
-            return cached[1]
-        if cached:
-            del _CONTEXT_CACHE[key]
-        build_lock = _CONTEXT_BUILD_LOCKS.setdefault(key, Lock())
+        reusable_key = None
+        for cache_key, cached in reversed(list(_CONTEXT_CACHE.items())):
+            if now_monotonic - cached[0] >= timeout:
+                del _CONTEXT_CACHE[cache_key]
+                _CONTEXT_BUILD_LOCKS.pop(cache_key, None)
+            elif cache_key[0] == scope and _context_covers(cached[1], criteria):
+                reusable_key = cache_key
+                break
+        if reusable_key is not None:
+            _CONTEXT_CACHE.move_to_end(reusable_key)
+            return _CONTEXT_CACHE[reusable_key][1]
+        build_lock = _CONTEXT_BUILD_LOCKS.setdefault(build_key, Lock())
     # Prevent identical cold requests from multiplying the expensive catalog
-    # work. Different locations build independently.
+    # work. Nearby coordinates can reuse the same expanded regional context.
     with build_lock:
         now_monotonic = monotonic()
         with _CONTEXT_CACHE_LOCK:
-            cached = _CONTEXT_CACHE.get(key)
-            if cached and now_monotonic - cached[0] < timeout:
-                _CONTEXT_CACHE.move_to_end(key)
-                return cached[1]
-        context = _build_candidate_context(criteria, visit_at)
+            for cache_key, cached in reversed(list(_CONTEXT_CACHE.items())):
+                if (now_monotonic - cached[0] < timeout
+                        and cache_key[0] == scope
+                        and _context_covers(cached[1], criteria)):
+                    _CONTEXT_CACHE.move_to_end(cache_key)
+                    return cached[1]
+        context = _build_candidate_context(
+            criteria,
+            visit_at,
+            reuse_km=settings.RECOMMENDATION_CONTEXT_REUSE_KM,
+        )
         with _CONTEXT_CACHE_LOCK:
-            _CONTEXT_CACHE[key] = (monotonic(), context)
-            _CONTEXT_CACHE.move_to_end(key)
+            _CONTEXT_CACHE[build_key] = (monotonic(), context)
+            _CONTEXT_CACHE.move_to_end(build_key)
             while len(_CONTEXT_CACHE) > _CONTEXT_CACHE_MAX_ENTRIES:
                 expired_key, _ = _CONTEXT_CACHE.popitem(last=False)
                 _CONTEXT_BUILD_LOCKS.pop(expired_key, None)
         return context
+
+
+def _request_candidates(context, criteria):
+    latitude = float(criteria['latitude'])
+    longitude = float(criteria['longitude'])
+    radius = float(criteria['radius_km'])
+    if latitude == context.center_latitude and longitude == context.center_longitude:
+        return [
+            (distance, place)
+            for distance, place in context.candidates
+            if distance <= radius
+        ]
+    candidates = []
+    for _, place in context.candidates:
+        distance = _haversine_km(latitude, longitude, place)
+        if distance <= radius:
+            candidates.append((distance, place))
+    candidates.sort(key=lambda item: (item[0], item[1].id))
+    return candidates
 
 
 def prepare_recommendations(criteria, *, now=None, supplement=True):
@@ -394,7 +462,7 @@ def prepare_recommendations(criteria, *, now=None, supplement=True):
     now = now or timezone.now()
     visit_at = criteria.get('visit_at') or now
     context = _candidate_context(criteria, visit_at)
-    candidates = context.candidates
+    candidates = _request_candidates(context, criteria)
     classification_qualities = context.classification_qualities
     weather_profiles = context.weather_profiles
     crowds = _crowds_for_candidates(candidates, visit_at, now)
