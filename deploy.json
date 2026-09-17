@@ -13,6 +13,7 @@
   "environment": {
     "DJANGO_DEBUG": "false",
     "DJANGO_ALLOWED_HOSTS": "127.0.0.1,localhost",
+    "DJANGO_MIGRATION_TARGET": "places.0010_place_places_plac_latitud_09f61a_idx_and_more",
     "GOOGLE_CLIENT_ID": "",
     "DATA_WORKER_ENABLED": "true",
     "TOUR_API_DAILY_LIMIT": "1000",

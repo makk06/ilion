@@ -1,5 +1,6 @@
 """One web master and one SQLite collector, supervised by container PID 1."""
 import fcntl
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 import signal
@@ -9,8 +10,77 @@ import sys
 import time
 
 
+APPROVED_MIGRATION_TARGETS = {
+    'places.0010_place_places_plac_latitud_09f61a_idx_and_more': (
+        'places',
+        '0010_place_places_plac_latitud_09f61a_idx_and_more',
+    ),
+}
+
+
+def _pending_migrations():
+    from django.db import connections
+    from django.db.migrations.executor import MigrationExecutor
+
+    connection = connections['default']
+    try:
+        executor = MigrationExecutor(connection)
+        return [
+            (migration.app_label, migration.name)
+            for migration, backwards in executor.migration_plan(
+                executor.loader.graph.leaf_nodes()
+            )
+            if not backwards
+        ]
+    finally:
+        connections.close_all()
+
+
+def _quick_check(database):
+    with sqlite3.connect(database) as connection:
+        result = connection.execute('PRAGMA quick_check').fetchone()
+    if result != ('ok',):
+        raise RuntimeError('SQLite integrity check failed')
+
+
+def _backup_database(storage, database, target):
+    backup_directory = storage / 'migration-backups'
+    backup_directory.mkdir(exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
+    backup = backup_directory / f'db-before-{target.replace(".", "-")}-{timestamp}.sqlite3'
+    partial = backup.with_suffix('.sqlite3.partial')
+    with sqlite3.connect(database) as source, sqlite3.connect(partial) as destination:
+        source.backup(destination)
+    _quick_check(partial)
+    os.replace(partial, backup)
+    return backup
+
+
+def _apply_approved_migration(storage, database):
+    pending = _pending_migrations()
+    if not pending:
+        return None
+
+    target = os.environ.get('DJANGO_MIGRATION_TARGET', '').strip()
+    approved = APPROVED_MIGRATION_TARGETS.get(target)
+    if approved is None or pending != [approved]:
+        raise RuntimeError('Database migrations require an exact approved target')
+
+    backup = _backup_database(storage, database, target)
+    subprocess.run(
+        [sys.executable, 'manage.py', 'migrate', approved[0], approved[1], '--noinput'],
+        env=os.environ.copy(),
+        check=True,
+    )
+    if _pending_migrations():
+        raise RuntimeError('Approved database migration did not reach the current schema')
+    _quick_check(database)
+    print(f'runtime: database backup retained at {backup}', flush=True)
+    return backup
+
+
 def initialize_database(storage):
-    """Initialize only an absent database; never auto-migrate an existing DB."""
+    """Initialize a new DB, or apply one exact, explicitly approved migration."""
     database = storage / 'db.sqlite3'
     if not database.exists():
         staging = storage / 'initializing'
@@ -18,6 +88,8 @@ def initialize_database(storage):
         subprocess.run([sys.executable, 'manage.py', 'migrate', '--noinput'],
                        env={**os.environ, 'STORAGE_DIR': str(staging)}, check=True)
         os.replace(staging / 'db.sqlite3', database)
+    else:
+        _apply_approved_migration(storage, database)
     subprocess.run([sys.executable, 'manage.py', 'migrate', '--check'], check=True)
     with sqlite3.connect(database) as connection:
         connection.execute('PRAGMA journal_mode=WAL')

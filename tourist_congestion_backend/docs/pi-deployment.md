@@ -33,7 +33,9 @@ GHCR 패키지가 없으면 `.github/workflows/bootstrap-ilion-image.yml`을 먼
 
 현재 deployd JSON에는 DB 업로드/복원 기능이 없어, 사용자 선택에 따라 **빈 운영 DB에서 재구축**한다. 로컬 테스트 DB는 변경하지 않으며 이미지에 포함하지 않는다. 기존 수동/AI 분류 검토 결과는 자동으로 이전되지 않는다. 새로 받은 목록·상세에는 현재 코드의 이름·설명 분류가 적용된다. AI 분류 호출은 자동 실행하지 않는다.
 
-`STORAGE_DIR=/data` 아래 SQLite, WAL, 잠금 파일, 워커 heartbeat를 저장한다. DB가 아예 없을 때만 staging DB에 현재 스키마를 만든 뒤 설치한다. 기존 DB에서는 미적용 migration 검사를 하고 변경이 필요하면 시작을 거부한다. 향후 schema migration은 백업과 별도 승인이 필요하다. 이미지 롤백은 SQLite를 되돌리지 않는다.
+`STORAGE_DIR=/data` 아래 SQLite, WAL, 잠금 파일, 워커 heartbeat를 저장한다. DB가 아예 없을 때만 staging DB에 현재 스키마를 만든 뒤 설치한다. 기존 DB의 schema migration은 백업과 별도 승인이 필요하며, 기본 동작은 미적용 migration이 있으면 시작을 거부하는 것이다.
+
+승인된 migration은 `deploy.json`의 `DJANGO_MIGRATION_TARGET`과 실제 미적용 migration이 정확히 하나로 일치할 때만 적용한다. 적용 전 SQLite backup API로 `/data/migration-backups`에 일관된 복사본을 만들고 `PRAGMA quick_check`를 통과시킨다. 적용 뒤에도 전체 migration 상태와 DB 무결성을 다시 검사한다. 현재 허용 대상은 조회 인덱스만 추가하는 `places.0010_place_places_plac_latitud_09f61a_idx_and_more`이며, 다른 migration이 함께 대기하면 컨테이너 시작을 거부한다. 백업은 자동 삭제하지 않는다. 이미지 롤백은 SQLite와 적용된 migration을 되돌리지 않는다.
 
 기존 테스트 SQLite를 이전하려면 별도의 운영 DB 복원 절차를 마련해야 한다. 실행 중 파일을 단순 복사하지 말고 SQLite backup으로 일관된 복사본을 만든다. 현재 배포에는 사용자·세션·테스트 시드를 옮기는 절차가 포함되지 않는다.
 
