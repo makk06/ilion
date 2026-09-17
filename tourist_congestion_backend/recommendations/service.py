@@ -1,16 +1,23 @@
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from decimal import Context, Decimal
 from heapq import nsmallest
+import json
 import math
 from threading import Lock
 from time import monotonic
+from types import SimpleNamespace
 
 from django.conf import settings
-from django.db.models import Exists, OuterRef, Q
+from django.db import connection
+from django.db.models import Q
 from django.utils import timezone
 
-from places.models import CrowdData, Place, PlaceCrowdArea, PlaceInfo, PlaceSource
+from places.models import (
+    CrowdData, ExternalSource, Place, PlaceClassificationEvidence,
+    PlaceCrowdArea, PlaceInfo, PlaceSource, PlaceWeatherExposure,
+)
 from places.views import EARTH_RADIUS_KM, _haversine_km, _nearby_bounding_box
 from places.services.weather import forecast_for, forecasts_for, grid_for, latest_available_issue
 from places.services.jobs import enqueue
@@ -113,10 +120,64 @@ class _CandidateEvaluation:
     rank_score: float = 0
 
 
+class _MissingCandidateInfo(PlaceInfo.DoesNotExist, AttributeError):
+    pass
+
+
+class _MissingCandidateClassification(PlaceClassificationEvidence.DoesNotExist, AttributeError):
+    pass
+
+
+class _MissingCandidateWeatherExposure(PlaceWeatherExposure.DoesNotExist, AttributeError):
+    pass
+
+
+@dataclass(slots=True)
+class _CandidatePlace:
+    """The recommendation-only subset of Place and its sparse one-to-ones."""
+
+    id: int
+    name: str
+    category: str
+    subcategory: str
+    address: str
+    latitude: object
+    longitude: object
+    indoor_outdoor: str
+    indoor_outdoor_source: str
+    indoor_outdoor_evidence: str
+    open_status: str
+    tour_type_codes: tuple
+    _info: object
+    _classification_record: object
+    _weather_exposure_record: object
+
+    @property
+    def info(self):
+        if self._info is None:
+            raise _MissingCandidateInfo
+        return self._info
+
+    @property
+    def classification_record(self):
+        if self._classification_record is None:
+            raise _MissingCandidateClassification
+        return self._classification_record
+
+    @property
+    def weather_exposure_record(self):
+        if self._weather_exposure_record is None:
+            raise _MissingCandidateWeatherExposure
+        return self._weather_exposure_record
+
+
 _CONTEXT_CACHE = OrderedDict()
 _CONTEXT_CACHE_LOCK = Lock()
 _CONTEXT_BUILD_LOCKS = {}
 _CONTEXT_CACHE_MAX_ENTRIES = 4
+_COORDINATE_FIELD = Place._meta.get_field('latitude')
+_COORDINATE_QUANTUM = Decimal(1).scaleb(-_COORDINATE_FIELD.decimal_places)
+_SQLITE_DECIMAL_CONTEXT = Context(prec=15)
 
 
 def _event_valid_at(raw_data, visit_at):
@@ -200,8 +261,37 @@ def _profiles_for_candidates(candidates):
         return {}
     latitudes = [place.latitude for _, place in candidates]
     longitudes = [place.longitude for _, place in candidates]
-    bounds = (min(latitudes), max(latitudes), min(longitudes), max(longitudes))
-    codes = source_codes_for(bounds=bounds)
+    bounds = tuple(
+        value if isinstance(value, Decimal) else
+        _SQLITE_DECIMAL_CONTEXT.create_decimal_from_float(value).quantize(
+            _COORDINATE_QUANTUM, context=_COORDINATE_FIELD.context,
+        )
+        for value in (min(latitudes), max(latitudes), min(longitudes), max(longitudes))
+    )
+    # Active TourAPI codes are carried by the candidate query. Keep the
+    # historical candidate-derived bounds check so response metadata stays
+    # byte-for-byte compatible at bounding endpoints.
+    if all(hasattr(place, 'tour_type_codes') for _, place in candidates):
+        bounded_sources = PlaceSource.objects.filter(
+            source=ExternalSource.TOUR_API,
+            match_status=PlaceSource.MatchStatus.MATCHED,
+            place__latitude__gte=bounds[0], place__latitude__lte=bounds[1],
+            place__longitude__gte=bounds[2], place__longitude__lte=bounds[3],
+        ).values_list('place_id')
+        sql, params = bounded_sources.query.sql_with_params()
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            bounded_source_ids = set()
+            while rows := cursor.fetchmany(100):
+                bounded_source_ids.update(row[0] for row in rows)
+        codes = {
+            place.id: place.tour_type_codes if place.id in bounded_source_ids else ()
+            for _, place in candidates
+        }
+    else:
+        # Internal callers may supply ordinary Place instances rather than
+        # the recommendation query's compact records.
+        codes = source_codes_for([place.id for _, place in candidates])
     veto_ids = veto_ids_for(bounds=bounds)
     # The digest only validates stored offline profiles. Most catalog places
     # have no stored profile, so hashing their descriptions on every request
@@ -241,20 +331,83 @@ def _context_scope(criteria, visit_at):
     )
 
 
-def _with_candidate_data(queryset):
-    return queryset.select_related(
-        'classification_record', 'info', 'weather_exposure_record',
-    ).only(*_CANDIDATE_FIELDS)
+def _candidate_rows(queryset):
+    """Read candidate and active-source fields without building model graphs."""
+    values = queryset.values_list(
+        *_CANDIDATE_FIELDS,
+        'sources__source',
+        'sources__raw_data__lclsSystm3',
+    )
+    sql, params = values.query.sql_with_params()
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        while rows := cursor.fetchmany(100):
+            yield from rows
+
+
+def _json_from_database(value):
+    if not isinstance(value, str):
+        return value
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return value
+
+
+def _json_scalar_from_database(value):
+    # SQLite's JSON key transform returns these three JSON primitives as type
+    # names; ordinary TourAPI codes are already plain strings.
+    if value == 'null':
+        return None
+    if value == 'true':
+        return True
+    if value == 'false':
+        return False
+    return value
+
+
+def _coordinate_from_database(value):
+    if value is None or isinstance(value, Decimal):
+        return value
+    return _SQLITE_DECIMAL_CONTEXT.create_decimal_from_float(value).quantize(
+        _COORDINATE_QUANTUM, context=_COORDINATE_FIELD.context,
+    )
+
+
+def _candidate_place(row):
+    info = SimpleNamespace(description=row[11]) if row[11] is not None else None
+    classification = None
+    if row[12] is not None:
+        classification = SimpleNamespace(
+            label=row[12], method=row[13], version=row[14], input_hash=row[15],
+            quote=row[16], span_start=row[17], span_end=row[18],
+            evidence_quotes=_json_from_database(row[19]),
+            primary_activity=row[20], scope=row[21],
+            ancillary_note=row[22], rationale=row[23], weather_exposure=row[24],
+            weather_activity=row[25], weather_reason=row[26],
+        )
+    exposure = None
+    if row[29] is not None:
+        exposure = SimpleNamespace(
+            level=row[27], activity=row[28], source=row[29], reason=row[30],
+            conflict=bool(row[31]), conflict_reason=row[32], type_code=row[33],
+            type_name=row[34], factor=row[35], version=row[36], input_hash=row[37],
+        )
+    return _CandidatePlace(
+        id=row[0], name=row[1], category=row[2], subcategory=row[3], address=row[4],
+        latitude=_coordinate_from_database(row[5]),
+        longitude=_coordinate_from_database(row[6]), indoor_outdoor=row[7],
+        indoor_outdoor_source=row[8], indoor_outdoor_evidence=row[9],
+        open_status=row[10], tour_type_codes=(), _info=info,
+        _classification_record=classification, _weather_exposure_record=exposure,
+    )
 
 
 def _recommendable_places():
     """Apply source visibility without hydrating per-place crowd subqueries."""
-    sources = PlaceSource.objects.filter(place_id=OuterRef('pk'))
-    active_sources = sources.filter(match_status=PlaceSource.MatchStatus.MATCHED)
-    return Place.objects.alias(
-        _has_any_source=Exists(sources),
-        _has_active_source=Exists(active_sources),
-    ).filter(Q(_has_any_source=False) | Q(_has_active_source=True)).order_by()
+    return Place.objects.filter(
+        Q(sources__isnull=True) | Q(sources__match_status=PlaceSource.MatchStatus.MATCHED),
+    ).order_by()
 
 
 def _load_candidates(criteria, visit_at):
@@ -272,7 +425,6 @@ def _load_candidates(criteria, visit_at):
     if criteria.get('required_indoor_outdoor'):
         queryset = queryset.filter(indoor_outdoor=criteria['required_indoor_outdoor']).exclude(
             indoor_outdoor_source='')
-    queryset = _with_candidate_data(queryset)
     valid_event_ids = {
         place_id for place_id, raw_data in PlaceInfo.objects.filter(
             place__category='축제/공연/행사',
@@ -281,9 +433,26 @@ def _load_candidates(criteria, visit_at):
         ).values_list('place_id', 'raw_data')
         if _event_valid_at(raw_data, visit_at)
     }
+    places = {}
+    tour_type_codes = {}
+    legacy_source_place_ids = set()
+    for row in _candidate_rows(queryset):
+        place = places.get(row[0])
+        if place is None:
+            place = _candidate_place(row)
+            places[place.id] = place
+        if row[38] == ExternalSource.TOUR_API:
+            type_code = _json_scalar_from_database(row[39])
+            if type_code:
+                tour_type_codes.setdefault(place.id, []).append(str(type_code).strip())
+            else:
+                legacy_source_place_ids.add(place.id)
+    if legacy_source_place_ids:
+        tour_type_codes.update(source_codes_for(legacy_source_place_ids))
     candidates = []
     classification_qualities = {}
-    for place in queryset:
+    for place in places.values():
+        place.tour_type_codes = tuple(tour_type_codes.get(place.id, ()))
         if place.category == '축제/공연/행사' and place.id not in valid_event_ids:
             continue
         if criteria.get('required_indoor_outdoor'):
