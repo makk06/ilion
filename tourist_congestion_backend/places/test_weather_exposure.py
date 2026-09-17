@@ -74,6 +74,47 @@ class WeatherExposureTests(TestCase):
         self.assertEqual(derive_exposure(exhibition, ['VE070300']).level, 'unknown')
         self.assertEqual(derive_exposure(pool, ['LS020700']).level, 'unknown')
 
+    def test_recommendation_keeps_duplicate_source_conflict_without_duplicate_candidate(self):
+        palace = venue('출처 충돌 고궁', 'HS010100')
+        PlaceSource.objects.create(place=palace, source=ExternalSource.TOUR_API,
+            external_id='conflicting-source', match_status='matched',
+            raw_data={'lclsSystm3': 'NA010100'}, last_synced_at=NOW)
+
+        result, _ = recommend(CRITERIA, now=NOW, supplement=False)
+
+        self.assertEqual(result['candidate_count'], 1)
+        self.assertEqual(result['items'][0]['place']['weather_exposure']['source'],
+                         'source_conflict')
+
+    def test_recommendation_uses_legacy_tour_type_code(self):
+        palace = venue('레거시 고궁', 'HS010100')
+        source = palace.sources.get()
+        source.raw_data = {'lclssystm3': 'HS010100'}
+        source.save(update_fields=['raw_data'])
+
+        result, _ = recommend(CRITERIA, now=NOW, supplement=False)
+
+        self.assertEqual(result['candidate_count'], 1)
+        self.assertEqual(result['items'][0]['place']['weather_exposure']['source'],
+                         'type_prior')
+
+    def test_recommendation_source_join_preserves_visibility(self):
+        no_source = venue('직접 등록 장소', '')
+        inactive = venue('비활성 장소', 'HS010100')
+        inactive.sources.update(match_status='inactive')
+        mixed = venue('활성 장소', 'HS010100')
+        PlaceSource.objects.create(place=mixed, source=ExternalSource.TOUR_API,
+            external_id='inactive-copy', match_status='inactive',
+            raw_data={'lclsSystm3': 'HS010100'}, last_synced_at=NOW)
+
+        result, _ = recommend(CRITERIA, now=NOW, supplement=False)
+        ids = [item['place']['id'] for item in result['items']]
+
+        self.assertEqual(result['candidate_count'], 2)
+        self.assertEqual(ids.count(no_source.id), 1)
+        self.assertEqual(ids.count(mixed.id), 1)
+        self.assertNotIn(inactive.id, ids)
+
     def test_inferred_name_type_conflict_abstains_but_manual_wins_audit_veto(self):
         inferred = venue('바다 도서관', 'NA010100', label='indoor',
                          source='reviewed_name_rule_v5', category='문화시설')
