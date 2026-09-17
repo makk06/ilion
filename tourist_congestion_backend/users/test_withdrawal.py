@@ -287,3 +287,150 @@ class PurgeTests(TestCase):
 
         # 4. 원래 계정 행이 사라져 이어붙일 대상 자체가 없다
         self.assertFalse(User.objects.filter(pk=leaver_pk).exists())
+
+
+class WithdrawRequestTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            email='leaver@example.com', password='pw12345678', nickname='떠나는사람')
+        self.client.force_authenticate(user=self.user)
+
+    def test_withdraw_schedules_purge_seven_days_out(self):
+        response = self.client.post(reverse('withdraw'), {'password': 'pw12345678'})
+
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.status, User.Status.WITHDRAWN)
+        delta = self.user.purge_at - timezone.now()
+        self.assertGreater(delta, timedelta(days=6, hours=23))
+        self.assertLess(delta, timedelta(days=7))
+
+    def test_withdraw_requires_the_correct_password(self):
+        response = self.client.post(reverse('withdraw'), {'password': 'wrong-password'})
+
+        self.assertEqual(response.status_code, 401)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.status, User.Status.ACTIVE)
+
+    def test_withdraw_ends_every_session(self):
+        RefreshToken.objects.create(user=self.user, token_hash='t' * 64,
+                                    expires_at=timezone.now() + timedelta(days=1))
+        self.client.post(reverse('withdraw'), {'password': 'pw12345678'})
+        self.assertEqual(RefreshToken.objects.filter(user=self.user).count(), 0)
+
+    def test_withdraw_stores_the_reason_on_the_user_until_purge(self):
+        self.client.post(reverse('withdraw'),
+                         {'password': 'pw12345678', 'reason_code': 'no_longer_needed'})
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.withdrawal_reason_code, 'no_longer_needed')
+        # 철회한 사람의 사유가 집계에 섞이면 안 되므로 아직 만들지 않는다.
+        self.assertEqual(WithdrawalReason.objects.count(), 0)
+
+    def test_withdraw_rejects_an_unknown_reason_code(self):
+        response = self.client.post(reverse('withdraw'),
+                                    {'password': 'pw12345678', 'reason_code': '제가 이사를 가서요'})
+        self.assertEqual(response.status_code, 400)
+
+    def test_withdraw_requires_authentication(self):
+        self.client.force_authenticate(user=None)
+        response = self.client.post(reverse('withdraw'), {'password': 'pw12345678'})
+        self.assertIn(response.status_code, (401, 403))
+
+
+class WithdrawalPendingLoginTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            email='leaver@example.com', password='pw12345678', nickname='떠나는사람')
+        self.user.status = User.Status.WITHDRAWN
+        self.user.purge_at = timezone.now() + timedelta(days=7)
+        self.user.save(update_fields=['status', 'purge_at', 'updated_at'])
+
+    def test_login_reports_withdrawal_pending(self):
+        response = self.client.post(reverse('auth-login'),
+                                    {'email': 'leaver@example.com', 'password': 'pw12345678'})
+
+        self.assertEqual(response.status_code, 403)
+        body = response.json()
+        self.assertFalse(body['success'])
+        self.assertEqual(body['data']['code'], 'withdrawal_pending')
+        self.assertIn('purge_at', body['data'])
+
+    def test_wrong_password_does_not_reveal_withdrawal(self):
+        response = self.client.post(reverse('auth-login'),
+                                    {'email': 'leaver@example.com', 'password': 'wrong'})
+
+        self.assertEqual(response.status_code, 401)
+        self.assertNotIn('withdrawal_pending', response.content.decode())
+
+    def test_unknown_email_stays_a_plain_401(self):
+        response = self.client.post(reverse('auth-login'),
+                                    {'email': 'nobody@example.com', 'password': 'pw12345678'})
+        self.assertEqual(response.status_code, 401)
+
+
+class WithdrawCancelTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.place = create_place()
+        self.user = User.objects.create_user(
+            email='leaver@example.com', password='pw12345678', nickname='떠나는사람')
+        Review.objects.create(user=self.user, place=self.place, text='글', rating=5)
+        self.user.status = User.Status.WITHDRAWN
+        self.user.purge_at = timezone.now() + timedelta(days=7)
+        self.user.withdrawal_reason_code = 'etc'
+        self.user.save(update_fields=['status', 'purge_at', 'withdrawal_reason_code', 'updated_at'])
+
+    def test_cancel_restores_the_account_and_returns_tokens(self):
+        response = self.client.post(reverse('withdraw-cancel'),
+                                    {'email': 'leaver@example.com', 'password': 'pw12345678'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('access_token', response.json()['data'])
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.status, User.Status.ACTIVE)
+        self.assertIsNone(self.user.purge_at)
+        self.assertIsNone(self.user.withdrawal_reason_code)
+
+    def test_cancelled_withdrawal_never_reaches_the_reason_statistics(self):
+        # 스펙 9 검증 12: 철회한 사람의 사유가 집계를 부풀리면 안 된다.
+        self.client.post(reverse('withdraw-cancel'),
+                         {'email': 'leaver@example.com', 'password': 'pw12345678'})
+        purge_withdrawn_users()
+        self.assertEqual(WithdrawalReason.objects.count(), 0)
+        self.assertTrue(User.objects.filter(email='leaver@example.com').exists())
+
+    def test_cancel_leaves_every_row_intact(self):
+        self.client.post(reverse('withdraw-cancel'),
+                         {'email': 'leaver@example.com', 'password': 'pw12345678'})
+
+        review = Review.objects.get()
+        self.assertEqual(review.user_id, self.user.pk)
+        self.assertIsNone(review.actor_id)
+
+    def test_cancel_is_refused_once_the_purge_is_due(self):
+        self.user.purge_at = timezone.now() - timedelta(seconds=1)
+        self.user.save(update_fields=['purge_at', 'updated_at'])
+
+        response = self.client.post(reverse('withdraw-cancel'),
+                                    {'email': 'leaver@example.com', 'password': 'pw12345678'})
+
+        self.assertEqual(response.status_code, 409)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.status, User.Status.WITHDRAWN)
+
+    def test_cancel_requires_the_correct_password(self):
+        response = self.client.post(reverse('withdraw-cancel'),
+                                    {'email': 'leaver@example.com', 'password': 'wrong'})
+        self.assertEqual(response.status_code, 401)
+
+    def test_cancel_does_nothing_for_an_active_account(self):
+        self.user.status = User.Status.ACTIVE
+        self.user.purge_at = None
+        self.user.save(update_fields=['status', 'purge_at', 'updated_at'])
+
+        response = self.client.post(reverse('withdraw-cancel'),
+                                    {'email': 'leaver@example.com', 'password': 'pw12345678'})
+        self.assertEqual(response.status_code, 401)

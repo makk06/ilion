@@ -68,3 +68,21 @@ class FeedbackSerializer(serializers.ModelSerializer):
     class Meta:
         model = Feedback
         fields = ['id', 'place_id', 'feedback_type', 'value', 'memo', 'created_at']
+
+
+# 탈퇴 사유는 앱이 제시하는 선택지에서만 고른다. 자유 입력을 허용하면 본인을
+# 식별할 수 있는 내용이 들어와 집계의 익명성이 깨진다.
+WITHDRAWAL_REASON_CODES = (
+    'no_longer_needed',
+    'few_places',
+    'inaccurate_crowd',
+    'privacy_concern',
+    'switched_service',
+    'etc',
+)
+
+
+class WithdrawSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    id_token = serializers.CharField(required=False, allow_blank=True)
+    reason_code = serializers.ChoiceField(choices=WITHDRAWAL_REASON_CODES, required=False)
