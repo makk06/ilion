@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.conf import settings
 from django.utils import timezone
 from google.auth.transport import requests as google_requests
@@ -11,9 +13,20 @@ from rest_framework_simplejwt.tokens import RefreshToken as SimpleJWTRefreshToke
 
 from places.models import Place
 
-from .models import Favorite, RefreshToken, User
-from .serializers import FavoriteCreateSerializer, GoogleLoginSerializer, LoginSerializer, SignupSerializer
+from .models import Favorite, Feedback, RefreshToken, User
+from .serializers import (
+    FavoriteCreateSerializer,
+    FeedbackCreateSerializer,
+    FeedbackSerializer,
+    GoogleLoginSerializer,
+    LoginSerializer,
+    SignupSerializer,
+)
 from .utils import generate_random_nickname, hash_token
+
+# 같은 사용자가 같은 장소에 같은 유형의 피드백을 다시 남길 수 있게 되기까지의 대기 시간.
+# 정책 변경(3일, 일주일 등) 시 이 값만 조정한다.
+FEEDBACK_COOLDOWN = timedelta(days=1)
 
 
 def success_response(data=None, message='', status_code=http_status.HTTP_200_OK):
@@ -208,3 +221,42 @@ class FavoriteDeleteView(APIView):
 
         favorite.delete()
         return success_response(message='즐겨찾기가 삭제되었습니다.')
+
+
+class FeedbackListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        feedbacks = Feedback.objects.filter(user=request.user).order_by('-created_at')
+        return success_response({'feedbacks': FeedbackSerializer(feedbacks, many=True).data})
+
+    def post(self, request):
+        serializer = FeedbackCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(serializer.errors)
+
+        data = serializer.validated_data
+        already_submitted = Feedback.objects.filter(
+            user=request.user,
+            place_id=data['place_id'],
+            feedback_type=data['feedback_type'],
+            created_at__gt=timezone.now() - FEEDBACK_COOLDOWN,
+        ).exists()
+        if already_submitted:
+            return error_response(
+                '같은 장소에 같은 유형의 피드백은 하루에 한 번만 남길 수 있습니다.',
+                http_status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        feedback = Feedback.objects.create(
+            user=request.user,
+            place_id=data['place_id'],
+            feedback_type=data['feedback_type'],
+            value=data.get('value'),
+            memo=data.get('memo'),
+        )
+        return success_response(
+            FeedbackSerializer(feedback).data,
+            '피드백이 등록되었습니다.',
+            http_status.HTTP_201_CREATED,
+        )

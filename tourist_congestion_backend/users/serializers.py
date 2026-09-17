@@ -4,7 +4,7 @@ from rest_framework import serializers
 
 from places.models import Place
 
-from .models import User
+from .models import Feedback, User
 
 
 class SignupSerializer(serializers.ModelSerializer):
@@ -50,3 +50,21 @@ class FavoriteCreateSerializer(serializers.Serializer):
         if not Place.objects.filter(id=value).exists():
             raise serializers.ValidationError('존재하지 않는 장소입니다.')
         return value
+
+
+class FeedbackCreateSerializer(serializers.Serializer):
+    place_id = serializers.IntegerField()
+    feedback_type = serializers.ChoiceField(choices=Feedback.FeedbackType.choices)
+    value = serializers.IntegerField(min_value=0, max_value=100, required=False, allow_null=True)
+    memo = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+
+    def validate_place_id(self, value):
+        if not Place.objects.filter(id=value).exists():
+            raise serializers.ValidationError('존재하지 않는 장소입니다.')
+        return value
+
+
+class FeedbackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Feedback
+        fields = ['id', 'place_id', 'feedback_type', 'value', 'memo', 'created_at']
