@@ -67,6 +67,23 @@ class Command(BaseCommand):
                 query_counts.append(len(queries))
                 candidate_count = data['candidate_count']
                 top_ids = [item['place']['id'] for item in data['items']]
+            nearby_offset_km = min(settings.RECOMMENDATION_CONTEXT_REUSE_KM / 2, 0.25)
+            nearby_criteria = {
+                **criteria,
+                'latitude': latitude + nearby_offset_km / 111.32,
+            }
+            with CaptureQueriesContext(connection) as nearby_queries:
+                started = perf_counter()
+                nearby_prepared = prepare_recommendations(
+                    nearby_criteria, now=at, supplement=False,
+                )
+                nearby_data, _ = recommend(
+                    nearby_criteria,
+                    now=at,
+                    supplement=False,
+                    prepared=nearby_prepared,
+                )
+                nearby_ms = round((perf_counter() - started) * 1000, 2)
             ordered = sorted(durations)
             results[city] = {
                 'candidate_count': candidate_count,
@@ -79,6 +96,10 @@ class Command(BaseCommand):
                 'preparation_runs_ms': preparation_durations,
                 'ranking_runs_ms': ranking_durations,
                 'query_counts': query_counts,
+                'nearby_offset_km': nearby_offset_km,
+                'nearby_ms': nearby_ms,
+                'nearby_query_count': len(nearby_queries),
+                'nearby_candidate_count': nearby_data['candidate_count'],
             }
         self.stdout.write(json.dumps({
             'evaluated_at': at.isoformat(),
@@ -87,6 +108,7 @@ class Command(BaseCommand):
             'provider_calls': 0,
             'database_writes': 0,
             'context_cache_seconds': settings.RECOMMENDATION_CONTEXT_CACHE_SECONDS,
+            'context_reuse_km': settings.RECOMMENDATION_CONTEXT_REUSE_KM,
             'cities': results,
         }, ensure_ascii=False, indent=2))
 

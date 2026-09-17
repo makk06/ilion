@@ -120,6 +120,46 @@ class RecommendationTests(TestCase):
         finally:
             clear_recommendation_context_cache()
 
+    @override_settings(
+        RECOMMENDATION_CONTEXT_CACHE_SECONDS=60,
+        RECOMMENDATION_CONTEXT_REUSE_KM=1,
+    )
+    def test_static_context_cache_reuses_nearby_coordinates_exactly(self):
+        place('첫 중심 후보', 35.16, 129.16)
+        edge = place('이동 후 반경 후보', 35.257, 129.16)
+        nearby_criteria = {**BASE, 'latitude': 35.168}
+        clear_recommendation_context_cache()
+        try:
+            with patch('recommendations.service._load_candidates',
+                       wraps=_load_candidates) as load:
+                first, _ = recommend(BASE, now=NOW, supplement=False)
+                nearby, _ = recommend(nearby_criteria, now=NOW, supplement=False)
+            self.assertEqual(load.call_count, 1)
+            self.assertNotIn(edge.id, [item['place']['id'] for item in first['items']])
+            self.assertIn(edge.id, [item['place']['id'] for item in nearby['items']])
+
+            clear_recommendation_context_cache()
+            exact, _ = recommend(nearby_criteria, now=NOW, supplement=False)
+            self.assertEqual(nearby, exact)
+        finally:
+            clear_recommendation_context_cache()
+
+    @override_settings(
+        RECOMMENDATION_CONTEXT_CACHE_SECONDS=60,
+        RECOMMENDATION_CONTEXT_REUSE_KM=1,
+    )
+    def test_static_context_cache_rebuilds_outside_reuse_region(self):
+        place('지역 후보', 35.16, 129.16)
+        clear_recommendation_context_cache()
+        try:
+            with patch('recommendations.service._load_candidates',
+                       wraps=_load_candidates) as load:
+                recommend(BASE, now=NOW, supplement=False)
+                recommend({**BASE, 'latitude': 35.18}, now=NOW, supplement=False)
+            self.assertEqual(load.call_count, 2)
+        finally:
+            clear_recommendation_context_cache()
+
     def test_weather_opt_out_and_required_evidence_are_independent(self):
         outdoor = place('가까운 야외', 35.16, 129.16, 'outdoor')
         indoor = place('실내', 35.16, 129.161, 'indoor')
