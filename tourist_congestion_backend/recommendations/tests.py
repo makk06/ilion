@@ -148,6 +148,48 @@ class RecommendationTests(TestCase):
         RECOMMENDATION_CONTEXT_CACHE_SECONDS=60,
         RECOMMENDATION_CONTEXT_REUSE_KM=1,
     )
+    def test_static_context_cache_reuses_larger_radius_for_smaller_request_exactly(self):
+        near = place('작은 반경 후보', 35.17, 129.16)
+        far = place('큰 반경 전용 후보', 35.22, 129.16)
+        smaller = {**BASE, 'radius_km': 3}
+        clear_recommendation_context_cache()
+        try:
+            with patch('recommendations.service._load_candidates',
+                       wraps=_load_candidates) as load:
+                recommend(BASE, now=NOW, supplement=False)
+                reused, _ = recommend(smaller, now=NOW, supplement=False)
+            self.assertEqual(load.call_count, 1)
+            reused_ids = [item['place']['id'] for item in reused['items']]
+            self.assertIn(near.id, reused_ids)
+            self.assertNotIn(far.id, reused_ids)
+
+            clear_recommendation_context_cache()
+            exact, _ = recommend(smaller, now=NOW, supplement=False)
+            self.assertEqual(reused, exact)
+        finally:
+            clear_recommendation_context_cache()
+
+    @override_settings(
+        RECOMMENDATION_CONTEXT_CACHE_SECONDS=60,
+        RECOMMENDATION_CONTEXT_REUSE_KM=1,
+    )
+    def test_static_context_cache_rebuilds_when_radius_grows_past_coverage(self):
+        place('반경 확장 후보', 35.22, 129.16)
+        smaller = {**BASE, 'radius_km': 3}
+        clear_recommendation_context_cache()
+        try:
+            with patch('recommendations.service._load_candidates',
+                       wraps=_load_candidates) as load:
+                recommend(smaller, now=NOW, supplement=False)
+                recommend(BASE, now=NOW, supplement=False)
+            self.assertEqual(load.call_count, 2)
+        finally:
+            clear_recommendation_context_cache()
+
+    @override_settings(
+        RECOMMENDATION_CONTEXT_CACHE_SECONDS=60,
+        RECOMMENDATION_CONTEXT_REUSE_KM=1,
+    )
     def test_static_context_cache_rebuilds_outside_reuse_region(self):
         place('지역 후보', 35.16, 129.16)
         clear_recommendation_context_cache()
@@ -436,6 +478,15 @@ class RecommendationTests(TestCase):
         self.assertIn('후보', message)
         self.assertEqual(first['items'][0]['travel_time_minutes'], None)
         self.assertEqual(first['items'][0]['data_coverage'], .45)
+
+    def test_top_k_keeps_deterministic_order_when_more_candidates_than_limit(self):
+        candidates = [place(f'동점 {index}', 35.16, 129.16) for index in range(15)]
+        result, _ = recommend(BASE, now=NOW, supplement=False)
+        self.assertEqual(
+            [item['place']['id'] for item in result['items']],
+            [candidate.id for candidate in candidates[:BASE['limit']]],
+        )
+        self.assertEqual(result['candidate_count'], len(candidates))
 
     def test_quiet_required_never_treats_unknown_as_quiet(self):
         place('미확인', 35.16, 129.16)

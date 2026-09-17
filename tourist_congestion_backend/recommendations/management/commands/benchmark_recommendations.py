@@ -84,6 +84,26 @@ class Command(BaseCommand):
                     prepared=nearby_prepared,
                 )
                 nearby_ms = round((perf_counter() - started) * 1000, 2)
+            smaller_radius = max(0.1, radius / 2)
+            smaller_ms = None
+            smaller_query_count = None
+            smaller_candidate_count = None
+            if smaller_radius < radius:
+                smaller_criteria = {**criteria, 'radius_km': smaller_radius}
+                with CaptureQueriesContext(connection) as smaller_queries:
+                    started = perf_counter()
+                    smaller_prepared = prepare_recommendations(
+                        smaller_criteria, now=at, supplement=False,
+                    )
+                    smaller_data, _ = recommend(
+                        smaller_criteria,
+                        now=at,
+                        supplement=False,
+                        prepared=smaller_prepared,
+                    )
+                    smaller_ms = round((perf_counter() - started) * 1000, 2)
+                smaller_query_count = len(smaller_queries)
+                smaller_candidate_count = smaller_data['candidate_count']
             ordered = sorted(durations)
             results[city] = {
                 'candidate_count': candidate_count,
@@ -100,6 +120,10 @@ class Command(BaseCommand):
                 'nearby_ms': nearby_ms,
                 'nearby_query_count': len(nearby_queries),
                 'nearby_candidate_count': nearby_data['candidate_count'],
+                'smaller_radius_km': smaller_radius,
+                'smaller_radius_ms': smaller_ms,
+                'smaller_radius_query_count': smaller_query_count,
+                'smaller_radius_candidate_count': smaller_candidate_count,
             }
         self.stdout.write(json.dumps({
             'evaluated_at': at.isoformat(),
