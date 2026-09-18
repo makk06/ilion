@@ -4,9 +4,11 @@ from . import views
 from . import activity_views as activity
 
 urlpatterns = [
-    path('notifications', activity.NotificationsView.as_view()),
+    path('notifications', activity.NotificationsView.as_view(), name='notifications'),
     path('me', activity.MeView.as_view()),
-    path('reviews', activity.ReviewsView.as_view()),
+    path('me/withdraw', views.WithdrawView.as_view(), name='withdraw'),
+    path('me/withdraw/cancel', views.WithdrawCancelView.as_view(), name='withdraw-cancel'),
+    path('reviews', activity.ReviewsView.as_view(), name='reviews'),
     path('reviews/<int:pk>', activity.ReviewDetailView.as_view()),
     path('reviews/<int:pk>/like', activity.ReviewLikeView.as_view()),
     path('companions', activity.CompanionsView.as_view()),

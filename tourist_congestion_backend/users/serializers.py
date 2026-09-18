@@ -2,7 +2,12 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
+from django.utils import timezone
+
 from places.models import Place
+
+from .models import WithdrawnEmailHash
+from .utils import hash_email_for_withdrawal
 
 from .models import Feedback, User
 
@@ -13,6 +18,16 @@ class SignupSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['email', 'password', 'nickname']
+
+    def validate_email(self, value):
+        blocked = WithdrawnEmailHash.objects.filter(
+            email_hash=hash_email_for_withdrawal(value),
+            expires_at__gte=timezone.now().date(),
+        ).exists()
+        if blocked:
+            # 탈퇴 사실을 밝히지 않는다. 밝히면 남의 이메일로 탈퇴 여부를 캐낼 수 있다.
+            raise serializers.ValidationError('지금은 이 이메일로 가입할 수 없습니다.')
+        return value
 
     def validate_nickname(self, value):
         if User.objects.filter(nickname=value).exists():
@@ -68,3 +83,21 @@ class FeedbackSerializer(serializers.ModelSerializer):
     class Meta:
         model = Feedback
         fields = ['id', 'place_id', 'feedback_type', 'value', 'memo', 'created_at']
+
+
+# 탈퇴 사유는 앱이 제시하는 선택지에서만 고른다. 자유 입력을 허용하면 본인을
+# 식별할 수 있는 내용이 들어와 집계의 익명성이 깨진다.
+WITHDRAWAL_REASON_CODES = (
+    'no_longer_needed',
+    'few_places',
+    'inaccurate_crowd',
+    'privacy_concern',
+    'switched_service',
+    'etc',
+)
+
+
+class WithdrawSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    id_token = serializers.CharField(required=False, allow_blank=True)
+    reason_code = serializers.ChoiceField(choices=WITHDRAWAL_REASON_CODES, required=False)
