@@ -85,6 +85,16 @@ class ProductionMigrationTests(TestCase):
         )
         return self._run(['-c', script], environment, check=check)
 
+    def _database_at_partial_withdrawal_migration(self, storage):
+        environment = self._database_at_current_production_migration(storage)
+        self._run(
+            ['manage.py', 'migrate', 'users',
+             '0006_anonymousactor_withdrawalreason_withdrawnemailhash_and_more',
+             '--noinput'],
+            environment,
+        )
+        return environment
+
     def test_exact_approved_migration_plan_creates_verified_backup(self):
         with TemporaryDirectory() as directory:
             storage = Path(directory)
@@ -140,3 +150,30 @@ class ProductionMigrationTests(TestCase):
                     'SELECT 1 FROM django_migrations WHERE app = ? AND name = ?',
                     ('users', self.migration_name),
                 ).fetchone())
+
+    def test_approved_plan_resumes_after_first_migration_was_committed(self):
+        with TemporaryDirectory() as directory:
+            storage = Path(directory)
+            environment = self._database_at_partial_withdrawal_migration(storage)
+            environment['DJANGO_MIGRATION_TARGET'] = self.migration_target
+
+            self._initialize_existing_database(environment)
+
+            backups = list((storage / 'migration-backups').glob('*.sqlite3'))
+            self.assertEqual(len(backups), 1)
+            with sqlite3.connect(backups[0]) as backup:
+                self.assertEqual(backup.execute('PRAGMA quick_check').fetchone(), ('ok',))
+                self.assertEqual(backup.execute(
+                    'SELECT 1 FROM django_migrations WHERE app = ? AND name = ?',
+                    ('users', '0006_anonymousactor_withdrawalreason_withdrawnemailhash_and_more'),
+                ).fetchone(), (1,))
+                self.assertIsNone(backup.execute(
+                    'SELECT 1 FROM django_migrations WHERE app = ? AND name = ?',
+                    ('users', self.migration_name),
+                ).fetchone())
+            with sqlite3.connect(storage / 'db.sqlite3') as database:
+                self.assertEqual(database.execute('PRAGMA quick_check').fetchone(), ('ok',))
+                self.assertEqual(database.execute(
+                    'SELECT 1 FROM django_migrations WHERE app = ? AND name = ?',
+                    ('users', self.migration_name),
+                ).fetchone(), (1,))
