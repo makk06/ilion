@@ -30,6 +30,18 @@ APPROVED_MIGRATION_PLANS = {
     ),
 }
 
+# A deploy may be stopped after Django commits one migration but before the
+# next migration in the same approved plan finishes.  Permit only explicitly
+# listed remaining suffixes so the next container can resume the already
+# approved target without accepting unrelated schema drift.
+APPROVED_PARTIAL_MIGRATION_PLANS = {
+    'users.0007_favorite_actor_feedback_actor_recentplace_actor_and_more': (
+        (
+            ('users', '0007_favorite_actor_feedback_actor_recentplace_actor_and_more'),
+        ),
+    ),
+}
+
 
 def _pending_migrations():
     from django.db import connections
@@ -76,7 +88,9 @@ def _apply_approved_migration(storage, database):
 
     target = os.environ.get('DJANGO_MIGRATION_TARGET', '').strip()
     approved_plan = APPROVED_MIGRATION_PLANS.get(target)
-    if approved_plan is None or tuple(pending) != approved_plan:
+    approved_partial_plans = APPROVED_PARTIAL_MIGRATION_PLANS.get(target, ())
+    approved_pending_plans = (approved_plan, *approved_partial_plans)
+    if approved_plan is None or tuple(pending) not in approved_pending_plans:
         raise RuntimeError('Database migrations require an exact approved target')
 
     backup = _backup_database(storage, database, target)
