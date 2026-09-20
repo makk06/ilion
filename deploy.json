@@ -30,7 +30,7 @@
     "RECOMMENDATION_CONTEXT_REUSE_KM": "1"
   },
   "requiredSecrets": ["DJANGO_SECRET_KEY"],
-  "optionalSecrets": ["TOUR_API_SERVICE_KEY", "SEOUL_OPEN_API_KEY", "KMA_SERVICE_KEY"],
+  "optionalSecrets": ["TOUR_API_SERVICE_KEY", "SEOUL_OPEN_API_KEY", "KMA_SERVICE_KEY", "VWORLD_API_KEY"],
   "platform": "linux/arm64",
   "dockerfile": "Dockerfile",
   "context": ".",

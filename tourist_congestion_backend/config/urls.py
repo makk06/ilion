@@ -19,13 +19,14 @@ from django.urls import include, path
 from django.conf import settings
 from django.conf.urls.static import static
 
-from config.views import healthz
+from config.views import client_config, healthz
 from config.map_tiles import vworld_tile
 from config.test_dashboard import backend_test_dashboard
 from places.demo_views import place_demo
 from recommendations.views import RecommendationView
 
 urlpatterns = [
+    path('api/config', client_config, name='client-config'),
     path('api/maps/vworld/<int:z>/<int:x>/<int:y>.png', vworld_tile),
     path('healthz', healthz, name='healthz'),
     path('test/backend/', backend_test_dashboard, name='backend-test-dashboard'),

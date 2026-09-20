@@ -1,4 +1,4 @@
-"""Server-only VWorld credentials; clients receive image bytes, never upstream URLs."""
+"""VWorld tile proxy; clients receive image bytes, never upstream URLs."""
 import os
 import requests
 from django.http import HttpResponse
