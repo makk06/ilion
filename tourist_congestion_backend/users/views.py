@@ -20,6 +20,7 @@ from .serializers import (
     FeedbackSerializer,
     GoogleLoginSerializer,
     LoginSerializer,
+    PasswordChangeSerializer,
     SignupSerializer,
 )
 from .utils import generate_random_nickname, hash_token
@@ -178,6 +179,38 @@ class LogoutView(APIView):
     def post(self, request):
         RefreshToken.objects.filter(user=request.user).delete()
         return success_response(message='로그아웃되었습니다.')
+
+
+class PasswordChangeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.provider != User.Provider.EMAIL:
+            return error_response('소셜 계정은 비밀번호를 사용하지 않아요.')
+        serializer = PasswordChangeSerializer(
+            data=request.data, context={'user': request.user}
+        )
+        if not serializer.is_valid():
+            return error_response(serializer.errors)
+
+        request.user.set_password(serializer.validated_data['new_password'])
+        request.user.save(update_fields=['password', 'updated_at'])
+        # Every stored session used the old credential; force a fresh sign-in.
+        RefreshToken.objects.filter(user=request.user).delete()
+        return success_response(message='비밀번호를 변경했어요. 다시 로그인해 주세요.')
+
+
+class WithdrawView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user
+        # Withdrawn accounts fail is_active, so authenticate() rejects them while
+        # reviews and companion history keep pointing at a valid row.
+        user.status = User.Status.WITHDRAWN
+        user.save(update_fields=['status', 'updated_at'])
+        RefreshToken.objects.filter(user=user).delete()
+        return success_response(message='회원 탈퇴가 완료되었어요.')
 
 
 class RandomNicknameView(APIView):

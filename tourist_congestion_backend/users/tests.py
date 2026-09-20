@@ -59,6 +59,119 @@ class SignupTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertFalse(response.json()['success'])
+        self.assertEqual(
+            response.json()['message']['nickname'],
+            ['이미 사용 중인 닉네임이에요. 다른 닉네임을 써주세요.'],
+        )
+
+    def test_signup_duplicate_email_message_is_reader_facing(self):
+        User.objects.create_user(
+            email='taken@example.com', password='pw12345678', nickname='먼저가입'
+        )
+
+        response = self.client.post(reverse('auth-signup'), {
+            'email': 'taken@example.com',
+            'password': 'pw12345678',
+            'nickname': '나중가입',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        message = response.json()['message']['email']
+        self.assertEqual(message, ['이미 가입된 이메일이에요. 로그인해 주세요.'])
+        # Django's default phrasing must not reach the signup form.
+        self.assertNotIn('user', message[0])
+
+
+class PasswordChangeTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            email='pw@example.com', password='old-password-123', nickname='비번유저'
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_change_password_updates_credential_and_revokes_sessions(self):
+        RefreshToken.objects.create(
+            user=self.user,
+            token_hash='hash',
+            expires_at=timezone.now() + timedelta(days=1),
+        )
+
+        response = self.client.post(reverse('auth-password'), {
+            'current_password': 'old-password-123',
+            'new_password': 'brand-new-password-456',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('brand-new-password-456'))
+        self.assertFalse(RefreshToken.objects.filter(user=self.user).exists())
+
+    def test_change_password_rejects_wrong_current_password(self):
+        response = self.client.post(reverse('auth-password'), {
+            'current_password': 'not-my-password',
+            'new_password': 'brand-new-password-456',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('old-password-123'))
+
+    def test_change_password_rejects_weak_new_password(self):
+        response = self.client.post(reverse('auth-password'), {
+            'current_password': 'old-password-123',
+            'new_password': '12345678',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('old-password-123'))
+
+    def test_change_password_requires_authentication(self):
+        self.client.force_authenticate(None)
+
+        response = self.client.post(reverse('auth-password'), {
+            'current_password': 'old-password-123',
+            'new_password': 'brand-new-password-456',
+        })
+
+        self.assertEqual(response.status_code, 401)
+
+
+class WithdrawTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            email='bye@example.com', password='pw12345678', nickname='탈퇴유저'
+        )
+
+    def test_withdraw_marks_account_and_blocks_login(self):
+        self.client.force_authenticate(self.user)
+        RefreshToken.objects.create(
+            user=self.user,
+            token_hash='hash',
+            expires_at=timezone.now() + timedelta(days=1),
+        )
+
+        response = self.client.delete(reverse('auth-withdraw'))
+
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.status, User.Status.WITHDRAWN)
+        self.assertFalse(self.user.is_active)
+        self.assertFalse(RefreshToken.objects.filter(user=self.user).exists())
+
+        self.client.force_authenticate(None)
+        login = self.client.post(reverse('auth-login'), {
+            'email': 'bye@example.com',
+            'password': 'pw12345678',
+        })
+        self.assertEqual(login.status_code, 401)
+
+    def test_withdraw_requires_authentication(self):
+        response = self.client.delete(reverse('auth-withdraw'))
+
+        self.assertEqual(response.status_code, 401)
 
 
 class LoginTests(TestCase):
