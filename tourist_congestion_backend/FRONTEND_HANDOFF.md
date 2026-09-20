@@ -610,6 +610,8 @@ class IlionApi {
   철회 요청은 오래된 Authorization 헤더가 있어도 새로 제출한 자격 증명으로 검증한다.
 - 만료 access의 자동 갱신 제외 대상은 로그인·가입·Google 인증·refresh·철회 경로로 한정한다.
   탈퇴 신청과 비밀번호 변경은 유효 refresh가 있으면 갱신 후 한 번 재시도한다.
+- 비밀번호 변경은 기존 access도 무효화한다. 비밀번호 지문이 없는 구 릴리스의 JWT는
+  access/refresh 모두 재로그인이 필요하다. 배포 시 기존 사용자에게 재로그인을 안내한다.
 - `GET /api/me`는 읽기 전용 `provider`도 반환한다. 현재 Flutter는 이메일 로그인만 지원한다.
   Google 본인 확인·탈퇴·철회는 API에서 지원하지만 Google Flutter 인증 UI는 별도 작업이다.
 - 후기/사진의 자유 입력은 계정 연결 제거만으로 개인정보가 없어짐을 보장하지 않는다.

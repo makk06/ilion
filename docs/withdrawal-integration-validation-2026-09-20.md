@@ -19,7 +19,7 @@
 ## 검증 결과
 
 - #15 보완 상태 Django 전체: 293 tests PASS.
-- #15 + #16 통합 Django 전체: 302 tests PASS.
+- #15 + #16 통합 Django 전체: 305 tests PASS.
 - Flutter 3.47.5 / Dart 3.13.4: analyze PASS, tests 93 PASS, web build PASS.
   SDK가 고정하는 패키지 5개의 lockfile 변경도 함께 검증했다.
 - Django `makemigrations --check --dry-run`: 변경 없음.
@@ -47,3 +47,5 @@
 - 운영 DB는 config.0001_merge_main_recommendation까지 먼저 적용되어야 한다.
   이전 DB의 정확한 이력 확인 없이 마이그레이션 대상을 우회하지 않는다.
 - main 병합은 배포나 운영 데이터 파기 승인이 아니다.
+- 비밀번호 변경 시 기존 access도 무효화하도록 JWT 비밀번호 지문 검사를 활성화했다.
+  구 릴리스 토큰에는 지문이 없어 배포 후 한 번 재로그인이 필요하다.

@@ -196,6 +196,9 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
+    # Password changes invalidate already issued access tokens as well as refresh.
+    # Tokens from older releases without the password fingerprint must sign in again.
+    'CHECK_REVOKE_TOKEN': True,
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=14),
     'ROTATE_REFRESH_TOKENS': False,

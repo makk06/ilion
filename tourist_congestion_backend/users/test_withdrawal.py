@@ -667,3 +667,19 @@ class WithdrawalIntegrationTests(TestCase):
         self.assertNotIn('sensitive-error', str(logs.output))
         self.assertTrue(User.objects.filter(pk=self.user.pk).exists())
         self.assertFalse(User.objects.filter(pk=other.pk).exists())
+
+    def test_malformed_cancellation_credentials_do_not_crash(self):
+        self.user.status = User.Status.WITHDRAWN
+        self.user.purge_at = timezone.now() + timedelta(days=7)
+        self.user.save()
+        for password in ({'not': 'text'}, ['not-text'], 123):
+            response = self.client.post(reverse('withdraw-cancel'), {
+                'email': self.user.email, 'password': password,
+            }, format='json')
+            self.assertEqual(response.status_code, 401)
+        response = self.client.post(reverse('withdraw-cancel'), ['invalid'], format='json')
+        self.assertEqual(response.status_code, 400)
+        response = self.client.post(reverse('auth-login'), {
+            'email': ['invalid'], 'password': 'test',
+        }, format='json')
+        self.assertEqual(response.status_code, 401)

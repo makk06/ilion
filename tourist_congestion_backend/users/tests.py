@@ -83,6 +83,35 @@ class SignupTests(TestCase):
 
 
 class PasswordChangeTests(TestCase):
+    def test_legacy_refresh_without_password_fingerprint_requires_login(self):
+        from rest_framework_simplejwt.tokens import RefreshToken as JWTRefresh
+        from rest_framework_simplejwt.settings import api_settings
+        from .utils import hash_token
+        token = JWTRefresh.for_user(self.user)
+        del token[api_settings.REVOKE_TOKEN_CLAIM]
+        raw = str(token)
+        RefreshToken.objects.create(user=self.user, token_hash=hash_token(raw),
+            expires_at=timezone.now() + timedelta(days=1))
+        self.client.force_authenticate(None)
+        response = self.client.post(reverse('auth-refresh'), {'refresh_token': raw})
+        self.assertEqual(response.status_code, 401)
+
+    def test_password_change_revokes_real_access_and_refresh(self):
+        from .views import issue_tokens
+        tokens = issue_tokens(self.user)
+        self.client.force_authenticate(None)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access_token']}")
+        response = self.client.post(reverse('auth-password'), {
+            'current_password': 'old-password-123',
+            'new_password': 'brand-new-password-456',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.get('/api/me').status_code, 401)
+        self.client.credentials()
+        self.assertEqual(self.client.post(reverse('auth-refresh'), {
+            'refresh_token': tokens['refresh_token'],
+        }).status_code, 401)
+
     def setUp(self):
         self.client = APIClient()
         self.user = User.objects.create_user(

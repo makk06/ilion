@@ -12,6 +12,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken as SimpleJWTRefreshToken
+from rest_framework_simplejwt.settings import api_settings as jwt_settings
+from rest_framework_simplejwt.utils import get_md5_hash_password
 
 from places.models import Place
 
@@ -202,6 +204,10 @@ class RefreshView(APIView):
                 http_status.HTTP_401_UNAUTHORIZED,
             )
 
+        if jwt_settings.CHECK_REVOKE_TOKEN and jwt_refresh.get(
+            jwt_settings.REVOKE_TOKEN_CLAIM
+        ) != get_md5_hash_password(stored.user.password):
+            return error_response('다시 로그인해 주세요.', http_status.HTTP_401_UNAUTHORIZED)
         access_token = jwt_refresh.access_token
         return success_response({'access_token': str(access_token)}, 'Access Token이 재발급되었습니다.')
 
@@ -318,9 +324,13 @@ class FeedbackListCreateView(APIView):
 def _identity_confirmed(user, data):
     """탈퇴·철회 직전 본인 확인. 가입 경로에 맞는 수단만 인정한다."""
     if user.provider == User.Provider.GOOGLE:
-        payload = verify_google_identity(data.get('id_token') or '')
+        raw_token = data.get('id_token')
+        if not isinstance(raw_token, str) or not raw_token:
+            return False
+        payload = verify_google_identity(raw_token)
         return payload is not None and payload.get('sub') == user.provider_user_id
-    return user.check_password(data.get('password') or '')
+    password = data.get('password')
+    return isinstance(password, str) and user.check_password(password)
 
 
 def _withdrawal_pending_response(user):
@@ -340,7 +350,12 @@ def _pending_withdrawal_account(data):
     본인 확인이 끝난 뒤에만 탈퇴 사실을 알려 준다. 먼저 알려 주면 남의 이메일로
     탈퇴 여부를 캐낼 수 있다.
     """
-    email = (data.get('email') or '').strip().lower()
+    if not isinstance(data, dict):
+        return None
+    raw_email = data.get('email')
+    if not isinstance(raw_email, str):
+        return None
+    email = raw_email.strip().lower()
     if not email:
         return None
     user = User.objects.filter(email__iexact=email, status=User.Status.WITHDRAWN).first()
@@ -386,6 +401,8 @@ class WithdrawCancelView(APIView):
     @transaction.atomic
     def post(self, request):
         # Lock before checking credentials/deadline: never restore a stale snapshot.
+        if not isinstance(request.data, dict):
+            return error_response('이메일과 본인 확인 정보를 입력해 주세요.')
         email = str(request.data.get('email') or '').strip()
         user = User.objects.select_for_update().filter(
             email__iexact=email, status=User.Status.WITHDRAWN,
