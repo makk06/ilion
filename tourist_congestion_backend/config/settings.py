@@ -43,6 +43,8 @@ if not DEBUG and (SECRET_KEY.startswith('django-insecure-') or len(SECRET_KEY) <
 WITHDRAWAL_HASH_KEY = os.environ.get('WITHDRAWAL_HASH_KEY', '')
 if not DEBUG and len(WITHDRAWAL_HASH_KEY) < 50:
     raise ImproperlyConfigured('Set a production WITHDRAWAL_HASH_KEY of at least 50 characters.')
+if not DEBUG and WITHDRAWAL_HASH_KEY == SECRET_KEY:
+    raise ImproperlyConfigured('WITHDRAWAL_HASH_KEY must differ from DJANGO_SECRET_KEY.')
 if not WITHDRAWAL_HASH_KEY:
     WITHDRAWAL_HASH_KEY = SECRET_KEY
 

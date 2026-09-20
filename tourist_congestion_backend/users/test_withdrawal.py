@@ -1,6 +1,7 @@
 import uuid
 from datetime import date, timedelta
 from io import StringIO
+from unittest.mock import patch
 
 from django.core.management import call_command
 
@@ -560,3 +561,109 @@ class PurgeCommandTests(TestCase):
         out = StringIO()
         call_command('purge_withdrawn_users', stdout=out)
         self.assertIn('0', out.getvalue())
+
+
+class WithdrawalIntegrationTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            email='integration@example.com', password='safe-password-123',
+            nickname='통합검증',
+        )
+
+    def test_real_tokens_are_revoked_and_cancellation_restores_access(self):
+        tokens = self.client.post(reverse('auth-login'), {
+            'email': self.user.email, 'password': 'safe-password-123',
+        }).json()['data']
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access_token']}")
+        self.assertEqual(self.client.post(reverse('withdraw'), {
+            'password': 'safe-password-123',
+        }).status_code, 200)
+        self.assertEqual(self.client.get('/api/me').status_code, 401)
+        self.client.credentials()
+        self.assertEqual(self.client.post(reverse('auth-refresh'), {
+            'refresh_token': tokens['refresh_token'],
+        }).status_code, 401)
+        # A stale Authorization header must not prevent credential-based recovery.
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access_token']}")
+        restored = self.client.post(reverse('withdraw-cancel'), {
+            'email': self.user.email, 'password': 'safe-password-123',
+        })
+        self.assertEqual(restored.status_code, 200)
+        access = restored.json()['data']['access_token']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access}')
+        self.assertEqual(self.client.get('/api/me').status_code, 200)
+
+    def test_stale_user_cannot_issue_tokens_after_withdrawal(self):
+        from rest_framework.exceptions import AuthenticationFailed
+        from .views import issue_tokens
+        User.objects.filter(pk=self.user.pk).update(status=User.Status.WITHDRAWN)
+        with self.assertRaises(AuthenticationFailed):
+            issue_tokens(self.user)
+        self.assertFalse(RefreshToken.objects.filter(user=self.user).exists())
+
+    def test_refresh_rejects_inactive_user_even_if_row_survives(self):
+        from .views import issue_tokens
+        tokens = issue_tokens(self.user)
+        User.objects.filter(pk=self.user.pk).update(status=User.Status.WITHDRAWN)
+        self.assertEqual(self.client.post(reverse('auth-refresh'), {
+            'refresh_token': tokens['refresh_token'],
+        }).status_code, 401)
+
+    @patch('users.views.verify_google_identity')
+    def test_google_pending_account_never_receives_tokens(self, verify):
+        self.user.provider = User.Provider.GOOGLE
+        self.user.provider_user_id = 'test-google-sub'
+        self.user.status = User.Status.WITHDRAWN
+        self.user.purge_at = timezone.now() + timedelta(days=7)
+        self.user.save()
+        verify.return_value = {'sub': 'test-google-sub', 'email': self.user.email}
+        response = self.client.post(reverse('auth-google'), {'id_token': 'test'})
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()['data']['code'], 'withdrawal_pending')
+        self.assertFalse(RefreshToken.objects.filter(user=self.user).exists())
+        restored = self.client.post(reverse('withdraw-cancel'), {
+            'email': self.user.email, 'id_token': 'test',
+        })
+        self.assertEqual(restored.status_code, 200)
+
+    @patch('users.views.verify_google_identity')
+    def test_google_cannot_bypass_rejoin_block(self, verify):
+        verify.return_value = {'sub': 'purged-sub', 'email': 'purged@example.com'}
+        WithdrawnEmailHash.objects.create(
+            email_hash=hash_email_for_withdrawal('purged@example.com'),
+            expires_at=timezone.now().date() + timedelta(days=30),
+        )
+        response = self.client.post(reverse('auth-google'), {'id_token': 'test'})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(User.objects.filter(email='purged@example.com').exists())
+
+    def test_legacy_withdrawal_without_deadline_does_not_crash_login(self):
+        self.user.status = User.Status.WITHDRAWN
+        self.user.save()
+        response = self.client.post(reverse('auth-login'), {
+            'email': self.user.email, 'password': 'safe-password-123',
+        })
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn('withdrawal_pending', response.content.decode())
+
+    def test_failed_account_does_not_block_other_purges(self):
+        from .withdrawal import _purge_one
+        self.user.status = User.Status.WITHDRAWN
+        self.user.purge_at = timezone.now() - timedelta(seconds=1)
+        self.user.save()
+        other = User.objects.create_user(
+            email='other-purge@example.com', password='safe-password-123',
+            nickname='다음파기', status=User.Status.WITHDRAWN,
+            purge_at=self.user.purge_at,
+        )
+        def purge(user, now):
+            if user.pk == self.user.pk:
+                raise RuntimeError('sensitive-error-not-for-log')
+            return _purge_one(user, now)
+        with patch('users.withdrawal._purge_one', side_effect=purge):
+            with self.assertLogs('users.withdrawal', level='ERROR') as logs:
+                self.assertEqual(purge_withdrawn_users(), 1)
+        self.assertNotIn('sensitive-error', str(logs.output))
+        self.assertTrue(User.objects.filter(pk=self.user.pk).exists())
+        self.assertFalse(User.objects.filter(pk=other.pk).exists())

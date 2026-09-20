@@ -53,14 +53,17 @@ VWorld 콘솔에서 허용 도메인이나 앱을 서비스 범위로 제한한�
 
 | 운영 DB 상태 | `deploy.json`의 `DJANGO_MIGRATION_TARGET` |
 |---|---|
-| `config.0001_merge_main_recommendation` 미적용 | 먼저 `config.0001_merge_main_recommendation`으로 한 번 배포 |
+| `config.0001_merge_main_recommendation` 미적용 | 먼저 해당 마이그레이션을 포함한 이전 릴리스로 업그레이드; 이 릴리스는 기동 거부 |
 | 적용 완료 | `users.0007_favorite_actor_feedback_actor_recentplace_actor_and_more`로 변경 |
 
 두 단계를 한 번에 합치려면 두 계획을 이어붙인 새 승인 계획을 `runtime.py`에 추가해야 한다.
-`deploy.json`은 아직 구 대상을 가리키고 있으므로 **배포 전에 값을 바꿔야 한다.**
+`deploy.json`은 이제 users.0007을 가리킨다. **main 병합은 운영 DB 업그레이드나 배포 승인이 아니다.**
+배포 담당자는 현재 DB의 적용 이력을 먼저 확인해야 한다. 오래된 DB에 최신 코드를 놓고
+구 대상 문자열만 지정하는 방식은 남은 migration 검사 때문에 허용되지 않는다.
 
 환경변수 `WITHDRAWAL_HASH_KEY`(50자 이상, `DJANGO_SECRET_KEY`와 다른 값)도 함께 설정한다.
 설정하지 않으면 `DEBUG=false`에서 기동이 거부된다.
+`deploy.json.requiredSecrets`에도 이름만 등록되어 있으며 실제 값은 저장소에 포함하지 않는다.
 
 기존 테스트 SQLite를 이전하려면 별도의 운영 DB 복원 절차를 마련해야 한다. 실행 중 파일을 단순 복사하지 말고 SQLite backup으로 일관된 복사본을 만든다. 현재 배포에는 사용자·세션·테스트 시드를 옮기는 절차가 포함되지 않는다.
 

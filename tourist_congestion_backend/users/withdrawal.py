@@ -4,6 +4,7 @@
 있도록 순수 함수로 분리한다.
 """
 from datetime import timedelta
+import logging
 
 from django.db import transaction
 from django.db.models import F
@@ -18,6 +19,7 @@ from .utils import hash_email_for_withdrawal
 WITHDRAWAL_GRACE_PERIOD = timedelta(days=7)
 # 재가입 악용 방지용 이메일 지문의 보존 기간.
 WITHDRAWN_EMAIL_RETENTION = timedelta(days=30)
+logger = logging.getLogger(__name__)
 
 
 def purge_withdrawn_users(now=None):
@@ -29,10 +31,20 @@ def purge_withdrawn_users(now=None):
     now = now or timezone.now()
     purged = 0
     due = User.objects.filter(status=User.Status.WITHDRAWN, purge_at__lte=now)
-    for user in due.iterator():
-        with transaction.atomic():
-            _purge_one(user, now)
-        purged += 1
+    # IDs only: a cancellation may win while the batch is awaiting its lock.
+    for user_id in due.values_list('pk', flat=True).iterator():
+        try:
+            with transaction.atomic():
+                user = User.objects.select_for_update().filter(
+                    pk=user_id, status=User.Status.WITHDRAWN, purge_at__lte=now,
+                ).first()
+                if user is None:
+                    continue
+                _purge_one(user, now)
+            purged += 1
+        except Exception:
+            # Never log email, credentials or free text; retry this account next run.
+            logger.error('Withdrawal purge failed for user_id=%s', user_id)
 
     WithdrawnEmailHash.objects.filter(expires_at__lt=now.date()).delete()
     return purged
