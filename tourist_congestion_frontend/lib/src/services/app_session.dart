@@ -69,6 +69,14 @@ class AppSession extends ChangeNotifier {
     });
   }
 
+  Future<void> withdraw(String password) async {
+    await _api.post('/me/withdraw', body: {'password': password});
+    await _clear();
+  }
+
+  Future<void> cancelWithdrawal(String email, String password) => _authenticate(
+      '/me/withdraw/cancel', {'email': email.trim(), 'password': password});
+
   Future<void> _authenticate(String path, Map<String, String> body) async {
     final data =
         Map<String, dynamic>.from(await _api.post(path, body: body) as Map);
@@ -169,6 +177,11 @@ class AppSession extends ChangeNotifier {
     if (isAuthenticated) await _api.post('/auth/logout');
     await _clear();
   }
+
+  /// Drops the local session without calling the server. Used after a request
+  /// that already revoked every token, such as a password change or withdrawal,
+  /// where a logout call would only fail on the now-invalid credential.
+  Future<void> forgetSession() => _clear();
 
   Future<void> _clear() async {
     _generation++;

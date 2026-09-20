@@ -24,7 +24,10 @@ class _CompanionDetailScreenState extends State<CompanionDetailScreen> {
 
   Future<void> _action() async {
     if (_busy) return;
-    if (!await ensureSignedIn(context) || !mounted) return;
+    if (!await ensureSignedIn(context, reason: '동행에 참여하려면 로그인이 필요해요.') ||
+        !mounted) {
+      return;
+    }
     setState(() => _busy = true);
     try {
       // Refetch after signing in so membership never depends on an anonymous snapshot.
@@ -55,7 +58,10 @@ class _CompanionDetailScreenState extends State<CompanionDetailScreen> {
 
   Future<void> _delete() async {
     if (_busy) return;
-    if (!await ensureSignedIn(context) || !mounted) return;
+    if (!await ensureSignedIn(context, reason: '모집글을 관리하려면 로그인이 필요해요.') ||
+        !mounted) {
+      return;
+    }
     final yes = await showDialog<bool>(
         context: context,
         builder: (c) =>

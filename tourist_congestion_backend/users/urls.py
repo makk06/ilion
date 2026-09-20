@@ -25,6 +25,7 @@ urlpatterns = [
     path('auth/google', views.GoogleLoginView.as_view(), name='auth-google'),
     path('auth/refresh', views.RefreshView.as_view(), name='auth-refresh'),
     path('auth/logout', views.LogoutView.as_view(), name='auth-logout'),
+    path('auth/password', views.PasswordChangeView.as_view(), name='auth-password'),
     path('auth/nickname/random', views.RandomNicknameView.as_view(), name='auth-nickname-random'),
     path('favorites', views.FavoriteListCreateView.as_view(), name='favorite-list-create'),
     path('favorites/<int:place_id>', views.FavoriteDeleteView.as_view(), name='favorite-delete'),

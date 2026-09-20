@@ -1,6 +1,7 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
+from rest_framework.validators import UniqueValidator
 
 from django.utils import timezone
 
@@ -13,6 +14,37 @@ from .models import Feedback, User
 
 
 class SignupSerializer(serializers.ModelSerializer):
+    # ModelSerializer would build its own UniqueValidator whose message comes
+    # from the model field ("user의 email은/는 이미 존재합니다."). Declaring the
+    # validator here is what actually replaces that text for the signup form;
+    # error_messages alone does not reach it.
+    email = serializers.EmailField(
+        validators=[
+            UniqueValidator(
+                queryset=User.objects.all(),
+                message='이미 가입된 이메일이에요. 로그인해 주세요.',
+            )
+        ],
+        error_messages={
+            'invalid': '이메일 주소 형식이 올바르지 않아요.',
+            'blank': '이메일 주소를 입력해 주세요.',
+            'required': '이메일 주소를 입력해 주세요.',
+        },
+    )
+    nickname = serializers.CharField(
+        max_length=30,
+        validators=[
+            UniqueValidator(
+                queryset=User.objects.all(),
+                message='이미 사용 중인 닉네임이에요. 다른 닉네임을 써주세요.',
+            )
+        ],
+        error_messages={
+            'blank': '닉네임을 입력해 주세요.',
+            'required': '닉네임을 입력해 주세요.',
+            'max_length': '닉네임은 30자까지 쓸 수 있어요.',
+        },
+    )
     password = serializers.CharField(write_only=True, validators=[validate_password])
 
     class Meta:
@@ -29,17 +61,31 @@ class SignupSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('지금은 이 이메일로 가입할 수 없습니다.')
         return value
 
-    def validate_nickname(self, value):
-        if User.objects.filter(nickname=value).exists():
-            raise serializers.ValidationError('이미 사용 중인 닉네임입니다.')
-        return value
-
     def create(self, validated_data):
         password = validated_data.pop('password')
         user = User(provider=User.Provider.EMAIL, **validated_data)
         user.set_password(password)
         user.save()
         return user
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True)
+
+    def validate_current_password(self, value):
+        if not self.context['user'].check_password(value):
+            raise serializers.ValidationError('현재 비밀번호가 올바르지 않아요.')
+        return value
+
+    def validate_new_password(self, value):
+        validate_password(value, self.context['user'])
+        return value
+
+    def validate(self, attrs):
+        if attrs['current_password'] == attrs['new_password']:
+            raise serializers.ValidationError('현재 비밀번호와 다른 비밀번호를 입력해 주세요.')
+        return attrs
 
 
 class LoginSerializer(serializers.Serializer):

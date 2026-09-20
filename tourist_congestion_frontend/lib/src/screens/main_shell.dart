@@ -28,7 +28,13 @@ class _MainShellState extends State<MainShell> {
   ];
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => PopScope(
+      // Back on a secondary tab returns to 홈 rather than closing the app.
+      canPop: _selectedIndex == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _select(0);
+      },
+      child: Scaffold(
         body: IndexedStack(index: _selectedIndex, children: [
           for (final entry in _screens.indexed)
             if (entry.$1 < 4 || _visited.contains(entry.$1))
@@ -88,7 +94,7 @@ class _MainShellState extends State<MainShell> {
                 )),
           ),
         ),
-      );
+      ));
 
   void _select(int index) => setState(() {
         _selectedIndex = index;

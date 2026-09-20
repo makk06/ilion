@@ -22,7 +22,8 @@ class PlaceService {
           String regionPath = '',
           String crowdLevel = '',
           String estimateLevel = '',
-          int page = 1}) async =>
+          int page = 1,
+          int pageSize = 0}) async =>
       PlacePage.fromJson(Map<String, dynamic>.from(
           await ApiClient.instance.get('/places', query: {
         'keyword': keyword,
@@ -30,7 +31,8 @@ class PlaceService {
         'region_path': regionPath,
         'crowd_level': crowdLevel,
         'estimate_level': estimateLevel,
-        'page': '$page'
+        'page': '$page',
+        if (pageSize > 0) 'page_size': '$pageSize',
       }) as Map));
   Future<Place> detail(int id) async =>
       Place.fromJson(Map<String, dynamic>.from(

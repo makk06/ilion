@@ -4,7 +4,9 @@ from functools import wraps
 
 from django.conf import settings
 from django.db import OperationalError
-from django.db.models import Exists, OuterRef, Q, Subquery
+from django.db.models import (
+    Case, Exists, IntegerField, OuterRef, Q, Subquery, Value, When,
+)
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET
@@ -174,6 +176,47 @@ def _visible_places():
     )
 
 
+# Names opened by a bracket are bulk-imported records such as "(구)...".
+# They sort first under a plain name ordering and would otherwise fill page one.
+# A plain name ordering puts brackets and digits first, so page one fills with
+# bulk-imported records — "(구)...' branches, then "2026 ..." event listings.
+# Leading with Hangul keeps recognisable places at the top of a browse.
+_HANGUL_LEAD = r'^[가-힣]'
+
+
+def _ordered(queryset, keyword):
+    """Rank results before pagination.
+
+    Without a keyword the list leads with places that actually have something
+    to show. With a keyword, name matches outrank address-only matches so a
+    search for a landmark does not surface a shop that merely sits next to it.
+    """
+    queryset = queryset.annotate(
+        _content_rank=Case(
+            When(info__first_image_url__gt='', then=Value(0)),
+            When(info__description__gt='', then=Value(1)),
+            default=Value(2),
+            output_field=IntegerField(),
+        ),
+        _lead_rank=Case(
+            When(name__regex=_HANGUL_LEAD, then=Value(0)),
+            default=Value(1),
+            output_field=IntegerField(),
+        ),
+    )
+    if not keyword:
+        return queryset.order_by('_content_rank', '_lead_rank', 'name', 'id')
+    return queryset.annotate(
+        _match_rank=Case(
+            When(name__iexact=keyword, then=Value(0)),
+            When(name__istartswith=keyword, then=Value(1)),
+            When(name__icontains=keyword, then=Value(2)),
+            default=Value(3),
+            output_field=IntegerField(),
+        ),
+    ).order_by('_match_rank', '_content_rank', '_lead_rank', 'name', 'id')
+
+
 def _latest_crowd(place):
     if place.latest_crowd_id is None:
         return None
@@ -341,6 +384,7 @@ def place_list(request):
     if estimate_level:
         queryset = _filter_estimates(queryset, estimate_level)
 
+    queryset = _ordered(queryset, keyword)
     total = queryset.count()
     offset = (page - 1) * page_size
     items = [

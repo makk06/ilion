@@ -81,13 +81,13 @@ void main() {
     await tester.tap(find.text('오늘'));
     await tester.pumpAndSettle();
     expect(find.text('함께할 동행 2개'), findsOneWidget);
-    await tester.tap(find.text('모집 중만'));
+    await tester.tap(find.text('모집 중만 보기'));
     await tester.pumpAndSettle();
     expect(find.text('함께할 동행 1개'), findsOneWidget);
     await tester.tap(find.text('초기화'));
     await tester.pumpAndSettle();
     expect(find.text('함께할 동행 4개'), findsOneWidget);
-    await tester.tap(find.text('모집 중만'));
+    await tester.tap(find.text('모집 중만 보기'));
     await tester.pumpAndSettle();
     expect(find.text('함께할 동행 3개'), findsOneWidget);
     expect(tester.takeException(), isNull);

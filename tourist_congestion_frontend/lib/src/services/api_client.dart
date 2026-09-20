@@ -5,9 +5,11 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 class ApiException implements Exception {
-  const ApiException(this.message, {this.statusCode});
+  const ApiException(this.message, {this.statusCode, this.code, this.data});
   final String message;
   final int? statusCode;
+  final String? code;
+  final Map<String, dynamic>? data;
   @override
   String toString() => message;
 }
@@ -74,9 +76,16 @@ class ApiClient {
           .timeout(const Duration(seconds: 20));
       if (response.statusCode == 401 &&
           retry &&
-          !path.startsWith('/auth/') &&
+          !const {
+            '/auth/login',
+            '/auth/signup',
+            '/auth/google',
+            '/auth/refresh',
+            '/me/withdraw/cancel',
+          }.contains(path) &&
           await _refresh()) {
-        return _request(method, path, query: query, body: body, retry: false);
+        return await _request(method, path,
+            query: query, body: body, retry: false);
       }
       return _decode(response);
     } on TimeoutException {
@@ -104,7 +113,7 @@ class ApiClient {
               await _client.send(request).timeout(const Duration(seconds: 40)))
           .timeout(const Duration(seconds: 40));
       if (response.statusCode == 401 && retry && await _refresh()) {
-        return upload(path,
+        return await upload(path,
             fields: fields,
             bytes: bytes,
             filename: filename,
@@ -134,19 +143,44 @@ class ApiClient {
       final message = decoded is Map
           ? (decoded['message'] ?? decoded['detail'] ?? decoded)
           : null;
+      final data = decoded is Map && decoded['data'] is Map
+          ? Map<String, dynamic>.from(decoded['data'] as Map)
+          : null;
       throw ApiException(_message(message, response.statusCode),
-          statusCode: response.statusCode);
+          statusCode: response.statusCode,
+          code: data?['code'] as String?,
+          data: data);
     }
     return decoded['data'];
   }
 
+  /// Field names a validation error can be keyed by. Anything unlisted is shown
+  /// without its key rather than leaking an internal field name to the reader.
+  static const _fieldLabels = {
+    'email': '이메일',
+    'password': '비밀번호',
+    'new_password': '새 비밀번호',
+    'current_password': '현재 비밀번호',
+    'nickname': '닉네임',
+    'non_field_errors': '',
+    'detail': '',
+  };
+
   String _message(dynamic value, int status) {
     if (value is String && value.isNotEmpty) return value;
     if (value is Map) {
-      return value.entries
-          .map((e) =>
-              '${e.key}: ${e.value is List ? (e.value as List).join(', ') : e.value}')
-          .join('\n');
+      final lines = <String>[];
+      for (final entry in value.entries) {
+        final raw = entry.value;
+        final texts = raw is List
+            ? raw.map((e) => '$e').where((e) => e.isNotEmpty)
+            : ['$raw'];
+        final label = _fieldLabels[entry.key] ?? '';
+        for (final text in texts) {
+          lines.add(label.isEmpty ? text : '$label: $text');
+        }
+      }
+      if (lines.isNotEmpty) return lines.join('\n');
     }
     if (status == 401) return '로그인이 필요하거나 만료되었어요. 다시 로그인해 주세요.';
     return '요청을 처리하지 못했어요. 다시 시도해 주세요.';

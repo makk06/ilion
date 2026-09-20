@@ -63,7 +63,10 @@ class _ReviewFormScreenState extends State<ReviewFormScreen> {
       return;
     }
     setState(() => _validation = null);
-    if (!await ensureSignedIn(context) || !mounted) return;
+    if (!await ensureSignedIn(context, reason: '후기를 남기려면 로그인이 필요해요.') ||
+        !mounted) {
+      return;
+    }
     setState(() => _busy = true);
     try {
       if (widget.review != null && _photo != null) {

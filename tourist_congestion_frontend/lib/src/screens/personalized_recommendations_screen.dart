@@ -23,6 +23,7 @@ enum _Sort { recommendation, crowd, distance }
 
 class _PersonalizedRecommendationsScreenState
     extends State<PersonalizedRecommendationsScreen> {
+  static const _poolPageSize = 100;
   final _places = <Place>[];
   PlaceCategory? _category;
   _Sort _sort = _Sort.recommendation;
@@ -43,8 +44,10 @@ class _PersonalizedRecommendationsScreenState
       _error = null;
     });
     try {
-      final result =
-          await PlaceService.instance.list(page: refresh ? 1 : _page + 1);
+      // Ranking happens on this device, so a single page of results would
+      // limit every recommendation to the first 20 places the server returns.
+      final result = await PlaceService.instance
+          .list(page: refresh ? 1 : _page + 1, pageSize: _poolPageSize);
       if (!mounted) return;
       setState(() {
         if (refresh) _places.clear();

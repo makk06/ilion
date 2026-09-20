@@ -70,7 +70,11 @@ class _RecommendScreenState extends State<RecommendScreen> {
           heroTag: 'companion-create',
           tooltip: '동행 모집 작성',
           onPressed: () async {
-            if (!await ensureSignedIn(context) || !context.mounted) return;
+            if (!await ensureSignedIn(context,
+                    reason: '동행을 모집하려면 로그인이 필요해요.') ||
+                !context.mounted) {
+              return;
+            }
             await Navigator.push(
                 context,
                 MaterialPageRoute<bool>(
@@ -221,7 +225,7 @@ class _RecommendScreenState extends State<RecommendScreen> {
                                   borderRadius: BorderRadius.circular(20),
                                   onTap: () =>
                                       setState(() => _openOnly = !_openOnly),
-                                  child: _filterPill('모집 중만',
+                                  child: _filterPill('모집 중만 보기',
                                       active: _openOnly, arrow: false)),
                               if (widget.mine) ...[
                                 const SizedBox(width: 8),

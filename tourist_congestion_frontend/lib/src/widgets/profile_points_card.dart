@@ -55,7 +55,11 @@ class _ProfilePointsCardState extends State<ProfilePointsCard> {
   }
 
   Future<void> _open(Widget screen) async {
-    if (!await ensureSignedIn(context) || !mounted) return;
+    if (!await ensureSignedIn(context,
+            reason: '포인트와 리워드는 로그인 후 확인할 수 있어요.') ||
+        !mounted) {
+      return;
+    }
     await Navigator.push(
         context, MaterialPageRoute<void>(builder: (_) => screen));
     if (mounted) _load();

@@ -23,6 +23,32 @@ class ProfileScreen extends StatelessWidget {
         context, MaterialPageRoute<void>(builder: (_) => screen));
   }
 
+  Future<void> _logout(BuildContext context, AppSession session) async {
+    final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+              title: const Text('로그아웃'),
+              content: const Text('로그아웃하시겠어요?'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(c), child: const Text('취소')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(c, true),
+                    child: const Text('로그아웃')),
+              ],
+            ));
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await session.logout();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('로그아웃했어요.')));
+      }
+    } catch (e) {
+      if (context.mounted) activityError(context, e);
+    }
+  }
+
   Future<void> _nickname(BuildContext context) async {
     final controller = TextEditingController(
         text: AppSession.instance.profile?['nickname'] ?? '');
@@ -71,9 +97,9 @@ class ProfileScreen extends StatelessWidget {
                             style: TextStyle(
                                 fontSize: 16, fontWeight: FontWeight.w700))),
                     IconButton(
-                        tooltip: '알림 설정',
+                        tooltip: '계정 설정',
                         onPressed: () => _open(
-                            context, const NotificationSettingsScreen(),
+                            context, const AccountSettingsScreen(),
                             auth: true),
                         icon: const Icon(Icons.settings_outlined, size: 22)),
                     IconButton(
@@ -169,18 +195,16 @@ class ProfileScreen extends StatelessWidget {
               _menu(context, Icons.headset_mic_outlined, '도움말 및 문의',
                   const HelpScreen()),
               if (session.isAuthenticated)
+                _menu(context, Icons.manage_accounts_outlined, '계정 설정',
+                    const AccountSettingsScreen(),
+                    auth: true),
+              if (session.isAuthenticated)
                 Padding(
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                     child: Align(
                         alignment: Alignment.centerLeft,
                         child: TextButton(
-                            onPressed: () async {
-                              try {
-                                await session.logout();
-                              } catch (e) {
-                                if (context.mounted) activityError(context, e);
-                              }
-                            },
+                            onPressed: () => _logout(context, session),
                             child: const Text('로그아웃',
                                 style: TextStyle(
                                     fontSize: 12,
