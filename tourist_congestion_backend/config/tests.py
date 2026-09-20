@@ -25,6 +25,37 @@ class HealthzTests(TestCase):
         self.assertEqual(response.status_code, 405)
 
 
+class ClientConfigTests(SimpleTestCase):
+    @patch.dict('os.environ', {'VWORLD_API_KEY': 'test-vworld-key'})
+    def test_returns_vworld_api_key_for_client(self):
+        response = self.client.get(reverse('client-config'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            'success': True,
+            'data': {'vworld_api_key': 'test-vworld-key'},
+            'message': '',
+        })
+        self.assertEqual(response['Cache-Control'], 'no-store')
+
+    @patch.dict('os.environ', {'VWORLD_API_KEY': ''})
+    def test_returns_service_unavailable_when_key_is_not_configured(self):
+        response = self.client.get(reverse('client-config'))
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {
+            'success': False,
+            'data': None,
+            'message': '지도 설정을 일시적으로 불러올 수 없습니다.',
+        })
+        self.assertEqual(response['Cache-Control'], 'no-store')
+
+    def test_rejects_non_get_requests(self):
+        response = self.client.post(reverse('client-config'))
+
+        self.assertEqual(response.status_code, 405)
+
+
 @override_settings(RECOMMENDATION_CONTEXT_CACHE_SECONDS=0)
 class BackendTestDashboardTests(TestCase):
     url = '/test/backend/'

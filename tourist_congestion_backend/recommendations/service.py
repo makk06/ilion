@@ -1,15 +1,23 @@
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from decimal import Context, Decimal
+from heapq import nsmallest
+import json
 import math
 from threading import Lock
 from time import monotonic
+from types import SimpleNamespace
 
 from django.conf import settings
-from django.db.models import Exists, OuterRef, Q
+from django.db import connection
+from django.db.models import Q
 from django.utils import timezone
 
-from places.models import CrowdData, Place, PlaceCrowdArea, PlaceInfo, PlaceSource
+from places.models import (
+    CrowdData, ExternalSource, Place, PlaceClassificationEvidence,
+    PlaceCrowdArea, PlaceInfo, PlaceSource, PlaceWeatherExposure,
+)
 from places.views import EARTH_RADIUS_KM, _haversine_km, _nearby_bounding_box
 from places.services.weather import forecast_for, forecasts_for, grid_for, latest_available_issue
 from places.services.jobs import enqueue
@@ -45,12 +53,15 @@ DEFAULT_CATEGORY_REASONS = {
     '음식점': '주변 음식점으로 등록된 장소입니다.',
     '쇼핑': '주변 쇼핑 장소로 등록된 곳입니다.',
 }
+SCORE_KEYS = ('distance', 'category', 'crowd', 'weather', 'indoor_outdoor')
 
 
 _CANDIDATE_FIELDS = (
     'id', 'name', 'category', 'subcategory', 'address', 'latitude', 'longitude',
     'indoor_outdoor', 'indoor_outdoor_source', 'indoor_outdoor_evidence', 'open_status',
-    'info__description',
+)
+_CANDIDATE_METADATA_FIELDS = (
+    'id', 'info__description',
     'classification_record__label', 'classification_record__method',
     'classification_record__version', 'classification_record__input_hash',
     'classification_record__quote', 'classification_record__span_start',
@@ -104,15 +115,71 @@ class _CandidateEvaluation:
     weather_fit: object
     weather_factors: list
     weather_status: str
-    raw_scores: dict
-    evidence_factors: dict
+    raw_scores: tuple
+    evidence_factors: tuple
+    base_score: float = 0
+    distance_guard: float = 1
     rank_score: float = 0
+
+
+class _MissingCandidateInfo(PlaceInfo.DoesNotExist, AttributeError):
+    pass
+
+
+class _MissingCandidateClassification(PlaceClassificationEvidence.DoesNotExist, AttributeError):
+    pass
+
+
+class _MissingCandidateWeatherExposure(PlaceWeatherExposure.DoesNotExist, AttributeError):
+    pass
+
+
+@dataclass(slots=True)
+class _CandidatePlace:
+    """The recommendation-only subset of Place and its sparse one-to-ones."""
+
+    id: int
+    name: str
+    category: str
+    subcategory: str
+    address: str
+    latitude: object
+    longitude: object
+    indoor_outdoor: str
+    indoor_outdoor_source: str
+    indoor_outdoor_evidence: str
+    open_status: str
+    tour_type_codes: tuple
+    _info: object
+    _classification_record: object
+    _weather_exposure_record: object
+
+    @property
+    def info(self):
+        if self._info is None:
+            raise _MissingCandidateInfo
+        return self._info
+
+    @property
+    def classification_record(self):
+        if self._classification_record is None:
+            raise _MissingCandidateClassification
+        return self._classification_record
+
+    @property
+    def weather_exposure_record(self):
+        if self._weather_exposure_record is None:
+            raise _MissingCandidateWeatherExposure
+        return self._weather_exposure_record
 
 
 _CONTEXT_CACHE = OrderedDict()
 _CONTEXT_CACHE_LOCK = Lock()
 _CONTEXT_BUILD_LOCKS = {}
 _CONTEXT_CACHE_MAX_ENTRIES = 4
+_COORDINATE_FIELD = Place._meta.get_field('latitude')
+_COORDINATE_QUANTUM = Decimal(1).scaleb(-_COORDINATE_FIELD.decimal_places)
+_SQLITE_DECIMAL_CONTEXT = Context(prec=15)
 
 
 def _event_valid_at(raw_data, visit_at):
@@ -196,8 +263,37 @@ def _profiles_for_candidates(candidates):
         return {}
     latitudes = [place.latitude for _, place in candidates]
     longitudes = [place.longitude for _, place in candidates]
-    bounds = (min(latitudes), max(latitudes), min(longitudes), max(longitudes))
-    codes = source_codes_for(bounds=bounds)
+    bounds = tuple(
+        value if isinstance(value, Decimal) else
+        _SQLITE_DECIMAL_CONTEXT.create_decimal_from_float(value).quantize(
+            _COORDINATE_QUANTUM, context=_COORDINATE_FIELD.context,
+        )
+        for value in (min(latitudes), max(latitudes), min(longitudes), max(longitudes))
+    )
+    # Active TourAPI codes are carried by the candidate query. Keep the
+    # historical candidate-derived bounds check so response metadata stays
+    # byte-for-byte compatible at rounded bounding endpoints.
+    if all(hasattr(place, 'tour_type_codes') for _, place in candidates):
+        bounded_sources = PlaceSource.objects.filter(
+            source=ExternalSource.TOUR_API,
+            match_status=PlaceSource.MatchStatus.MATCHED,
+            place__latitude__gte=bounds[0], place__latitude__lte=bounds[1],
+            place__longitude__gte=bounds[2], place__longitude__lte=bounds[3],
+        ).values_list('place_id')
+        sql, params = bounded_sources.query.sql_with_params()
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            bounded_source_ids = set()
+            while rows := cursor.fetchmany(100):
+                bounded_source_ids.update(row[0] for row in rows)
+        codes = {
+            place.id: place.tour_type_codes if place.id in bounded_source_ids else ()
+            for _, place in candidates
+        }
+    else:
+        # Internal callers may supply ordinary Place instances rather than
+        # the recommendation query's compact records.
+        codes = source_codes_for([place.id for _, place in candidates])
     veto_ids = veto_ids_for(bounds=bounds)
     # The digest only validates stored offline profiles. Most catalog places
     # have no stored profile, so hashing their descriptions on every request
@@ -237,20 +333,105 @@ def _context_scope(criteria, visit_at):
     )
 
 
-def _with_candidate_data(queryset):
-    return queryset.select_related(
-        'classification_record', 'info', 'weather_exposure_record',
-    ).only(*_CANDIDATE_FIELDS)
+def _candidate_rows(queryset):
+    """Read candidate and active-source fields without building model graphs."""
+    values = queryset.values_list(
+        *_CANDIDATE_FIELDS,
+        'sources__source',
+        'sources__raw_data__lclsSystm3',
+    )
+    sql, params = values.query.sql_with_params()
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        while rows := cursor.fetchmany(100):
+            yield from rows
+
+
+def _candidate_metadata_rows(bounds):
+    """Read sparse one-to-one evidence without widening every candidate row."""
+    lat_min, lat_max, lon_min, lon_max = bounds
+    values = Place.objects.filter(
+        latitude__gte=lat_min, latitude__lte=lat_max,
+        longitude__gte=lon_min, longitude__lte=lon_max,
+    ).filter(
+        Q(classification_record__isnull=False)
+        | Q(weather_exposure_record__isnull=False),
+    ).values_list(*_CANDIDATE_METADATA_FIELDS)
+    sql, params = values.query.sql_with_params()
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        while rows := cursor.fetchmany(100):
+            yield from rows
+
+
+def _json_from_database(value):
+    if not isinstance(value, str):
+        return value
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return value
+
+
+def _json_scalar_from_database(value):
+    # SQLite's JSON key transform returns these three JSON primitives as type
+    # names; ordinary TourAPI codes are already plain strings.
+    if value == 'null':
+        return None
+    if value == 'true':
+        return True
+    if value == 'false':
+        return False
+    return value
+
+
+def _coordinate_from_database(value):
+    if value is None or isinstance(value, Decimal):
+        return value
+    return _SQLITE_DECIMAL_CONTEXT.create_decimal_from_float(value).quantize(
+        _COORDINATE_QUANTUM, context=_COORDINATE_FIELD.context,
+    )
+
+
+def _candidate_place(row):
+    return _CandidatePlace(
+        id=row[0], name=row[1], category=row[2], subcategory=row[3], address=row[4],
+        latitude=_coordinate_from_database(row[5]),
+        longitude=_coordinate_from_database(row[6]), indoor_outdoor=row[7],
+        indoor_outdoor_source=row[8], indoor_outdoor_evidence=row[9],
+        open_status=row[10], tour_type_codes=(), _info=None,
+        _classification_record=None, _weather_exposure_record=None,
+    )
+
+
+def _attach_candidate_metadata(places, bounds):
+    for row in _candidate_metadata_rows(bounds):
+        place = places.get(row[0])
+        if place is None:
+            continue
+        place._info = SimpleNamespace(description=row[1]) if row[1] is not None else None
+        if row[2] is not None:
+            place._classification_record = SimpleNamespace(
+                label=row[2], method=row[3], version=row[4], input_hash=row[5],
+                quote=row[6], span_start=row[7], span_end=row[8],
+                evidence_quotes=_json_from_database(row[9]),
+                primary_activity=row[10], scope=row[11],
+                ancillary_note=row[12], rationale=row[13], weather_exposure=row[14],
+                weather_activity=row[15], weather_reason=row[16],
+            )
+        if row[19] is not None:
+            place._weather_exposure_record = SimpleNamespace(
+                level=row[17], activity=row[18], source=row[19], reason=row[20],
+                conflict=bool(row[21]), conflict_reason=row[22], type_code=row[23],
+                type_name=row[24], factor=row[25], version=row[26], input_hash=row[27],
+            )
 
 
 def _recommendable_places():
     """Apply source visibility without hydrating per-place crowd subqueries."""
-    sources = PlaceSource.objects.filter(place_id=OuterRef('pk'))
-    active_sources = sources.filter(match_status=PlaceSource.MatchStatus.MATCHED)
-    return Place.objects.alias(
-        _has_any_source=Exists(sources),
-        _has_active_source=Exists(active_sources),
-    ).filter(Q(_has_any_source=False) | Q(_has_active_source=True)).order_by()
+    return Place.objects.filter(
+        Q(sources__isnull=True) | Q(sources__match_status=PlaceSource.MatchStatus.MATCHED),
+    ).order_by()
 
 
 def _load_candidates(criteria, visit_at):
@@ -268,7 +449,6 @@ def _load_candidates(criteria, visit_at):
     if criteria.get('required_indoor_outdoor'):
         queryset = queryset.filter(indoor_outdoor=criteria['required_indoor_outdoor']).exclude(
             indoor_outdoor_source='')
-    queryset = _with_candidate_data(queryset)
     valid_event_ids = {
         place_id for place_id, raw_data in PlaceInfo.objects.filter(
             place__category='축제/공연/행사',
@@ -277,9 +457,27 @@ def _load_candidates(criteria, visit_at):
         ).values_list('place_id', 'raw_data')
         if _event_valid_at(raw_data, visit_at)
     }
+    places = {}
+    tour_type_codes = {}
+    legacy_source_place_ids = set()
+    for row in _candidate_rows(queryset):
+        place = places.get(row[0])
+        if place is None:
+            place = _candidate_place(row)
+            places[place.id] = place
+        if row[11] == ExternalSource.TOUR_API:
+            type_code = _json_scalar_from_database(row[12])
+            if type_code:
+                tour_type_codes.setdefault(place.id, []).append(str(type_code).strip())
+            else:
+                legacy_source_place_ids.add(place.id)
+    if legacy_source_place_ids:
+        tour_type_codes.update(source_codes_for(legacy_source_place_ids))
+    _attach_candidate_metadata(places, (lat_min, lat_max, lon_min, lon_max))
     candidates = []
     classification_qualities = {}
-    for place in queryset:
+    for place in places.values():
+        place.tour_type_codes = tuple(tour_type_codes.get(place.id, ()))
         if place.category == '축제/공연/행사' and place.id not in valid_event_ids:
             continue
         if criteria.get('required_indoor_outdoor'):
@@ -333,7 +531,6 @@ def clear_recommendation_context_cache():
 
 def _candidate_context_key(criteria, visit_at):
     return (
-        float(criteria['radius_km']),
         visit_at.astimezone(KST).date().isoformat(),
         tuple(sorted(criteria.get('required_categories') or ())),
         criteria.get('required_indoor_outdoor') or '',
@@ -378,11 +575,16 @@ def _build_candidate_context(criteria, visit_at, *, reuse_km=0):
         if weather_profiles[place.id].factor else None
         for _, place in candidates
     }
+    context_candidates = [
+        (distance, place, math.radians(float(place.latitude)),
+         math.radians(float(place.longitude)))
+        for distance, place in candidates
+    ]
     return _CandidateContext(
         center_latitude=float(criteria['latitude']),
         center_longitude=float(criteria['longitude']),
         search_radius_km=float(expanded_criteria['radius_km']),
-        candidates=candidates,
+        candidates=context_candidates,
         classification_qualities=classification_qualities,
         weather_profiles=weather_profiles,
         grids=grids,
@@ -445,12 +647,23 @@ def _request_candidates(context, criteria):
     if latitude == context.center_latitude and longitude == context.center_longitude:
         return [
             (distance, place)
-            for distance, place in context.candidates
+            for distance, place, _, _ in context.candidates
             if distance <= radius
         ]
+    latitude_radians = math.radians(latitude)
+    longitude_radians = math.radians(longitude)
+    latitude_cosine = math.cos(latitude_radians)
     candidates = []
-    for _, place in context.candidates:
-        distance = _haversine_km(latitude, longitude, place)
+    for _, place, place_latitude, place_longitude in context.candidates:
+        latitude_delta = place_latitude - latitude_radians
+        longitude_delta = place_longitude - longitude_radians
+        haversine = (
+            math.sin(latitude_delta / 2) ** 2
+            + latitude_cosine
+            * math.cos(place_latitude)
+            * math.sin(longitude_delta / 2) ** 2
+        )
+        distance = 2 * EARTH_RADIUS_KM * math.asin(min(1, math.sqrt(haversine)))
         if distance <= radius:
             candidates.append((distance, place))
     candidates.sort(key=lambda item: (item[0], item[1].id))
@@ -594,28 +807,29 @@ def recommend(criteria, user=None, *, now=None, supplement=True, forecast_lookup
             crowd_fit = DEFAULT_CROWD_RISK[crowd['level']] if crowd else None
         else:
             crowd_fit = CROWD_FIT[criteria['crowd_level']][crowd['level']] if crowd else None
-        raw_scores = {
-            'distance': 100 / (1 + distance / settings.RECOMMENDATION_DISTANCE_SCALE_KM),
-            'category': (100 if place.category in preferred_categories else 0)
+        raw_scores = (
+            100 / (1 + distance / settings.RECOMMENDATION_DISTANCE_SCALE_KM),
+            (100 if place.category in preferred_categories else 0)
             if preferred_categories else DEFAULT_TRAVEL_CATEGORY_FIT[place.category],
-            'crowd': crowd_fit,
-            'weather': weather_fit,
-            'indoor_outdoor': (
+            crowd_fit,
+            weather_fit,
+            (
                 100 if place.indoor_outdoor == criteria['indoor_outdoor'] else
                 60 if place.indoor_outdoor == 'mixed' else 0
             ) if criteria.get('indoor_outdoor') and classification_factor else None,
-        }
-        evidence_factors = {
-            'distance': 1, 'category': 1,
-            'crowd': crowd['score_weight_factor'] if crowd else 0,
-            'weather': profile.factor,
-            'indoor_outdoor': classification_factor,
-        }
+        )
+        evidence_factors = (
+            1,
+            1,
+            crowd['score_weight_factor'] if crowd else 0,
+            profile.factor,
+            classification_factor,
+        )
         crowd_can_rank |= crowd_fit is not None and (
             criteria['crowd_level'] != 'any' or crowd_fit < NEUTRAL_RANKING_BASELINE
         )
         weather_can_rank |= weather_fit is not None
-        indoor_outdoor_can_rank |= raw_scores['indoor_outdoor'] is not None
+        indoor_outdoor_can_rank |= raw_scores[4] is not None
         evaluations.append(_CandidateEvaluation(
             distance=distance,
             place=place,
@@ -629,31 +843,34 @@ def recommend(criteria, user=None, *, now=None, supplement=True, forecast_lookup
             raw_scores=raw_scores,
             evidence_factors=evidence_factors,
         ))
-    ranking_keys = ['distance', 'category']
+    ranking_indices = [0, 1]
     if crowd_can_rank:
-        ranking_keys.append('crowd')
+        ranking_indices.append(2)
     if criteria.get('weather_aware', True) and weather_can_rank:
-        ranking_keys.append('weather')
+        ranking_indices.append(3)
     if criteria.get('indoor_outdoor') and indoor_outdoor_can_rank:
-        ranking_keys.append('indoor_outdoor')
+        ranking_indices.append(4)
+    ranking_keys = [SCORE_KEYS[index] for index in ranking_indices]
     weights = settings.RECOMMENDATION_WEIGHTS
     ranking_total = sum(weights[key] for key in ranking_keys)
     for evaluation in evaluations:
         raw_scores = evaluation.raw_scores
         factors = evaluation.evidence_factors
-        effective_scores = {
-            key: (NEUTRAL_RANKING_BASELINE + (value - NEUTRAL_RANKING_BASELINE) * factors[key])
-            if value is not None else None
-            for key, value in raw_scores.items()
-        }
-        score = sum(weights[key] * (
-            effective_scores[key] if effective_scores[key] is not None else NEUTRAL_RANKING_BASELINE
-        ) for key in ranking_keys) / ranking_total
+        score = sum(
+            weights[SCORE_KEYS[index]] * (
+                NEUTRAL_RANKING_BASELINE
+                + (raw_scores[index] - NEUTRAL_RANKING_BASELINE) * factors[index]
+                if raw_scores[index] is not None else NEUTRAL_RANKING_BASELINE
+            )
+            for index in ranking_indices
+        ) / ranking_total
         guard = 1 / (1 + max(0, evaluation.distance - settings.RECOMMENDATION_DISTANCE_GUARD_FREE_KM)
                      / settings.RECOMMENDATION_DISTANCE_GUARD_SCALE_KM)
+        evaluation.base_score = score
+        evaluation.distance_guard = guard
         evaluation.rank_score = score * guard
     crowd_ranking_requested = criteria['crowd_level'] != 'any'
-    evaluations.sort(key=lambda evaluation: (
+    ranked = nsmallest(criteria['limit'], evaluations, key=lambda evaluation: (
         -evaluation.rank_score,
         -(evaluation.crowd['observed_at'].timestamp()
           if crowd_ranking_requested and evaluation.crowd else 0),
@@ -661,20 +878,19 @@ def recommend(criteria, user=None, *, now=None, supplement=True, forecast_lookup
         evaluation.place.id,
     ))
     items = []
-    for rank, evaluation in enumerate(evaluations[:criteria['limit']], 1):
-        raw_scores = evaluation.raw_scores
-        factors = evaluation.evidence_factors
+    for rank, evaluation in enumerate(ranked, 1):
+        raw_score_values = evaluation.raw_scores
+        factor_values = evaluation.evidence_factors
+        raw_scores = dict(zip(SCORE_KEYS, raw_score_values))
+        factors = dict(zip(SCORE_KEYS, factor_values))
         effective_scores = {
             key: (NEUTRAL_RANKING_BASELINE + (value - NEUTRAL_RANKING_BASELINE) * factors[key])
             if value is not None else None
             for key, value in raw_scores.items()
         }
         contributors = [key for key in ranking_keys if raw_scores[key] is not None]
-        score = sum(weights[key] * (
-            effective_scores[key] if effective_scores[key] is not None else NEUTRAL_RANKING_BASELINE
-        ) for key in ranking_keys) / ranking_total
-        guard = 1 / (1 + max(0, evaluation.distance - settings.RECOMMENDATION_DISTANCE_GUARD_FREE_KM)
-                     / settings.RECOMMENDATION_DISTANCE_GUARD_SCALE_KM)
+        score = evaluation.base_score
+        guard = evaluation.distance_guard
         place = evaluation.place
         profile = evaluation.profile
         forecast = evaluation.forecast
