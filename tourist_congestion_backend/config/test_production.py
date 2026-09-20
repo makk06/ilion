@@ -38,8 +38,8 @@ class ProductionHealthTests(TestCase):
 
 class ProductionMigrationTests(TestCase):
     backend_directory = Path(__file__).resolve().parents[1]
-    migration_name = '0001_merge_main_recommendation'
-    migration_target = f'config.{migration_name}'
+    migration_name = '0007_favorite_actor_feedback_actor_recentplace_actor_and_more'
+    migration_target = f'users.{migration_name}'
 
     def _environment(self, storage, **updates):
         environment = {
@@ -70,8 +70,8 @@ class ProductionMigrationTests(TestCase):
             'from django.db import connection; '
             'from django.db.migrations.executor import MigrationExecutor; '
             'executor = MigrationExecutor(connection); '
-            "executor.migrate([('places', '0010_place_places_plac_latitud_09f61a_idx_and_more'), "
-            "('users', '0002_favorite'), ('admin', '0003_logentry_add_action_flag_choices'), "
+            "executor.migrate([('config', '0001_merge_main_recommendation'), "
+            "('admin', '0003_logentry_add_action_flag_choices'), "
             "('sessions', '0001_initial')])"
         )
         self._run(['-c', script], environment)
@@ -100,13 +100,13 @@ class ProductionMigrationTests(TestCase):
                 self.assertEqual(backup.execute('PRAGMA quick_check').fetchone(), ('ok',))
                 self.assertIsNone(backup.execute(
                     'SELECT 1 FROM django_migrations WHERE app = ? AND name = ?',
-                    ('config', self.migration_name),
+                    ('users', self.migration_name),
                 ).fetchone())
             with sqlite3.connect(storage / 'db.sqlite3') as database:
                 self.assertEqual(database.execute('PRAGMA quick_check').fetchone(), ('ok',))
                 self.assertEqual(database.execute(
                     'SELECT 1 FROM django_migrations WHERE app = ? AND name = ?',
-                    ('config', self.migration_name),
+                    ('users', self.migration_name),
                 ).fetchone(), (1,))
                 index_names = {
                     row[0]
@@ -138,5 +138,5 @@ class ProductionMigrationTests(TestCase):
             with sqlite3.connect(storage / 'db.sqlite3') as database:
                 self.assertIsNone(database.execute(
                     'SELECT 1 FROM django_migrations WHERE app = ? AND name = ?',
-                    ('config', self.migration_name),
+                    ('users', self.migration_name),
                 ).fetchone())

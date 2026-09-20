@@ -5,9 +5,11 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 class ApiException implements Exception {
-  const ApiException(this.message, {this.statusCode});
+  const ApiException(this.message, {this.statusCode, this.code, this.data});
   final String message;
   final int? statusCode;
+  final String? code;
+  final Map<String, dynamic>? data;
   @override
   String toString() => message;
 }
@@ -74,9 +76,16 @@ class ApiClient {
           .timeout(const Duration(seconds: 20));
       if (response.statusCode == 401 &&
           retry &&
-          !path.startsWith('/auth/') &&
+          !const {
+            '/auth/login',
+            '/auth/signup',
+            '/auth/google',
+            '/auth/refresh',
+            '/me/withdraw/cancel',
+          }.contains(path) &&
           await _refresh()) {
-        return _request(method, path, query: query, body: body, retry: false);
+        return await _request(method, path,
+            query: query, body: body, retry: false);
       }
       return _decode(response);
     } on TimeoutException {
@@ -104,7 +113,7 @@ class ApiClient {
               await _client.send(request).timeout(const Duration(seconds: 40)))
           .timeout(const Duration(seconds: 40));
       if (response.statusCode == 401 && retry && await _refresh()) {
-        return upload(path,
+        return await upload(path,
             fields: fields,
             bytes: bytes,
             filename: filename,
@@ -134,8 +143,13 @@ class ApiClient {
       final message = decoded is Map
           ? (decoded['message'] ?? decoded['detail'] ?? decoded)
           : null;
+      final data = decoded is Map && decoded['data'] is Map
+          ? Map<String, dynamic>.from(decoded['data'] as Map)
+          : null;
       throw ApiException(_message(message, response.statusCode),
-          statusCode: response.statusCode);
+          statusCode: response.statusCode,
+          code: data?['code'] as String?,
+          data: data);
     }
     return decoded['data'];
   }

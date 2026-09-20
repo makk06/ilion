@@ -55,7 +55,16 @@ class Command(BaseCommand):
                     minute = timezone.now().replace(second=0, microsecond=0)
                     if minute != last_schedule:
                         from places.services.scheduling import schedule
+                        from users.withdrawal import purge_withdrawn_users
                         schedule()
+                        # 파기 실패가 데이터 수집 스케줄을 멈추지 않게 분리한다.
+                        # 대상이 없으면 인덱스 조회 한 번으로 끝나므로 매분 호출해도 무방하다.
+                        try:
+                            purged = purge_withdrawn_users()
+                            if purged:
+                                self.stdout.write(f'purged_withdrawn_users={purged}')
+                        except Exception as error:
+                            self.stderr.write(f'purge_withdrawn_users failed: {error}')
                         last_schedule = minute
                 if options['dev']:
                     self._schedule_dev()

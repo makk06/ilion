@@ -153,7 +153,7 @@ class WithdrawTests(TestCase):
             expires_at=timezone.now() + timedelta(days=1),
         )
 
-        response = self.client.delete(reverse('auth-withdraw'))
+        response = self.client.post(reverse('withdraw'), {'password': 'pw12345678'})
 
         self.assertEqual(response.status_code, 200)
         self.user.refresh_from_db()
@@ -166,10 +166,11 @@ class WithdrawTests(TestCase):
             'email': 'bye@example.com',
             'password': 'pw12345678',
         })
-        self.assertEqual(login.status_code, 401)
+        self.assertEqual(login.status_code, 403)
+        self.assertEqual(login.json()['data']['code'], 'withdrawal_pending')
 
     def test_withdraw_requires_authentication(self):
-        response = self.client.delete(reverse('auth-withdraw'))
+        response = self.client.post(reverse('withdraw'), {'password': 'pw12345678'})
 
         self.assertEqual(response.status_code, 401)
 

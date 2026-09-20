@@ -25,6 +25,11 @@ GHCR 패키지가 없으면 `.github/workflows/bootstrap-ilion-image.yml`을 먼
 - `SEOUL_OPEN_API_KEY`: 서울 혼잡도
 - `KMA_SERVICE_KEY`: 기상청 단기예보
 
+`VWORLD_API_KEY`도 선택 secret이다. 지도 타일 프록시와 `GET /api/config`의
+클라이언트 지도 설정에 사용하며, 없으면 해당 지도 요청과 설정 API만 503으로
+응답하고 앱 health에는 영향을 주지 않는다. 클라이언트에 공개되는 키이므로
+VWorld 콘솔에서 허용 도메인이나 앱을 서비스 범위로 제한한다.
+
 없는 키의 정기 작업은 예약하지 않는다. 추천 요청에서 생긴 해당 공급자의 보충 작업은 설정 오류로 기록될 수 있다. 키를 추가해도 실행 중 컨테이너에는 즉시 반영되지 않으므로 등록 후 배포를 다시 실행한다. Google 로그인에는 공개 설정 `GOOGLE_CLIENT_ID`도 별도로 채운다.
 
 신규 앱은 등록 전 Secrets 대상이 없다. 첫 JSON을 제출하면 앱 등록 후 필수 secret 누락으로 첫 릴리스가 멈출 수 있다. 앱 Secrets에 위 네 값을 등록하고 같은 이미지로 배포를 재시도한다. 이는 예상된 초기 등록 순서이며 이미지 재발행은 필요 없다.
@@ -36,6 +41,29 @@ GHCR 패키지가 없으면 `.github/workflows/bootstrap-ilion-image.yml`을 먼
 `STORAGE_DIR=/data` 아래 SQLite, WAL, 잠금 파일, 워커 heartbeat를 저장한다. DB가 아예 없을 때만 staging DB에 현재 스키마를 만든 뒤 설치한다. 기존 DB의 schema migration은 백업과 별도 승인이 필요하며, 기본 동작은 미적용 migration이 있으면 시작을 거부하는 것이다.
 
 승인된 migration은 `deploy.json`의 `DJANGO_MIGRATION_TARGET`과 코드에 고정된 전체 미적용 순서가 정확히 일치할 때만 적용한다. 적용 전 SQLite backup API로 `/data/migration-backups`에 일관된 복사본을 만들고 `PRAGMA quick_check`를 통과시킨다. 적용 뒤에도 전체 migration 상태와 DB 무결성을 다시 검사한다. 현재 허용 대상 `config.0001_merge_main_recommendation`은 운영 리비전 `3d0ef38`의 스키마에서 최신 `main`의 혼잡도·사용자 모델과 병합 경계를 순서대로 적용한다. 예상하지 않은 migration이 하나라도 함께 대기하면 컨테이너 시작을 거부한다. 백업은 자동 삭제하지 않는다. 이미지 롤백은 SQLite와 적용된 migration을 되돌리지 않는다.
+
+### 회원 탈퇴 기능 배포 (2026-09-18 추가)
+
+탈퇴 기능은 migration 두 건(`users.0006`, `users.0007`)을 추가한다. 승인 대상
+`users.0007_favorite_actor_feedback_actor_recentplace_actor_and_more`로 `APPROVED_MIGRATION_PLANS`에
+등록되어 있다.
+
+**순서가 중요하다.** 이 승인 계획은 대기 목록이 위 두 건**뿐일 때만** 일치한다. 즉 운영 DB가
+직전 대상 `config.0001_merge_main_recommendation`을 이미 적용한 상태여야 한다.
+
+| 운영 DB 상태 | `deploy.json`의 `DJANGO_MIGRATION_TARGET` |
+|---|---|
+| `config.0001_merge_main_recommendation` 미적용 | 먼저 해당 마이그레이션을 포함한 이전 릴리스로 업그레이드; 이 릴리스는 기동 거부 |
+| 적용 완료 | `users.0007_favorite_actor_feedback_actor_recentplace_actor_and_more`로 변경 |
+
+두 단계를 한 번에 합치려면 두 계획을 이어붙인 새 승인 계획을 `runtime.py`에 추가해야 한다.
+`deploy.json`은 이제 users.0007을 가리킨다. **main 병합은 운영 DB 업그레이드나 배포 승인이 아니다.**
+배포 담당자는 현재 DB의 적용 이력을 먼저 확인해야 한다. 오래된 DB에 최신 코드를 놓고
+구 대상 문자열만 지정하는 방식은 남은 migration 검사 때문에 허용되지 않는다.
+
+환경변수 `WITHDRAWAL_HASH_KEY`(50자 이상, `DJANGO_SECRET_KEY`와 다른 값)도 함께 설정한다.
+설정하지 않으면 `DEBUG=false`에서 기동이 거부된다.
+`deploy.json.requiredSecrets`에도 이름만 등록되어 있으며 실제 값은 저장소에 포함하지 않는다.
 
 기존 테스트 SQLite를 이전하려면 별도의 운영 DB 복원 절차를 마련해야 한다. 실행 중 파일을 단순 복사하지 말고 SQLite backup으로 일관된 복사본을 만든다. 현재 배포에는 사용자·세션·테스트 시드를 옮기는 절차가 포함되지 않는다.
 
@@ -70,6 +98,7 @@ HTTPS 전달 헤더, 보안 쿠키와 정확한 앱 호스트의 HSTS를 사용�
 추천 API는 장소·분류·날씨 노출처럼 짧은 시간 동안 변하지 않는 후보 재료만 프로세스 메모리에 보관한다. 기본 설정에서는 최초 요청 위치 반경보다 1km 넓게 준비해 그 안의 인접 GPS 좌표가 5분 동안 같은 재료를 사용할 수 있다. 각 요청의 정확한 거리·반경 필터와 순위는 다시 계산하며, 예보와 혼잡 관측도 매 요청 DB에서 다시 읽는다.
 같은 중심에서 반경을 줄이는 조건 변경도 이미 준비한 더 큰 후보 영역을 재사용한다. 후보 평가는 고정 크기 응답에 맞춰 전체 정렬 대신 정확한 상위 결과만 선별하지만, 점수·동점 순서와 공개 응답은 기존 알고리즘과 동일하게 유지한다.
 새 위치의 최초 후보 조회는 Django가 만든 동일한 제한 SQL을 사용하되 수천 개의 `Place`·일대일 관련 모델 그래프를 만들지 않고 추천 전용 경량 행으로 읽는다. 여러 활성 출처는 장소별로 다시 합치며, 출처 없는 직접 등록 장소와 비활성 출처 제외 규칙도 유지한다. 이는 테스트 시안 전용 우회나 사전 예열이 아니라 일반 추천 API의 cold 경로 최적화다.
+설명 기반 분류와 저장 날씨 노출처럼 드문 일대일 근거는 모든 후보의 넓은 행에 반복해 싣지 않고, 같은 위치 범위의 작은 별도 조회로 합친다. 공개 응답과 출처 판정은 유지하며 cold 조회의 SQLite 전송·변환량만 줄인다.
 
 ## 상태와 복구
 

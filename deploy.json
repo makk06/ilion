@@ -13,7 +13,7 @@
   "environment": {
     "DJANGO_DEBUG": "false",
     "DJANGO_ALLOWED_HOSTS": "127.0.0.1,localhost",
-    "DJANGO_MIGRATION_TARGET": "config.0001_merge_main_recommendation",
+    "DJANGO_MIGRATION_TARGET": "users.0007_favorite_actor_feedback_actor_recentplace_actor_and_more",
     "GOOGLE_CLIENT_ID": "",
     "DATA_WORKER_ENABLED": "true",
     "TOUR_API_DAILY_LIMIT": "1000",
@@ -29,8 +29,8 @@
     "RECOMMENDATION_CONTEXT_CACHE_SECONDS": "300",
     "RECOMMENDATION_CONTEXT_REUSE_KM": "1"
   },
-  "requiredSecrets": ["DJANGO_SECRET_KEY"],
-  "optionalSecrets": ["TOUR_API_SERVICE_KEY", "SEOUL_OPEN_API_KEY", "KMA_SERVICE_KEY"],
+  "requiredSecrets": ["DJANGO_SECRET_KEY", "WITHDRAWAL_HASH_KEY"],
+  "optionalSecrets": ["TOUR_API_SERVICE_KEY", "SEOUL_OPEN_API_KEY", "KMA_SERVICE_KEY", "VWORLD_API_KEY"],
   "platform": "linux/arm64",
   "dockerfile": "Dockerfile",
   "context": ".",

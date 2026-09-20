@@ -21,6 +21,7 @@ def start(directory):
         '--mount', f'type=bind,src={directory},dst=/data',
         '-e', 'STORAGE_DIR=/data', '-e', 'APP_BASE_URL=https://ilion.example.test',
         '-e', 'DJANGO_SECRET_KEY=offline-smoke-only-never-use-in-production-1234567890-abcdefghij',
+        '-e', 'WITHDRAWAL_HASH_KEY=offline-withdrawal-smoke-only-never-use-in-production-0123456789',
         '-e', 'DATA_WORKER_ENABLED=true', IMAGE).stdout.strip()
 
 

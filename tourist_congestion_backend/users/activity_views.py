@@ -14,14 +14,22 @@ from .views import success_response, error_response
 from places.models import Place
 
 
+# 탈퇴자가 남긴 글의 작성자 표기. 원 작성자는 복원할 수 없다.
+ANONYMOUS_AUTHOR_NAME = '탈퇴한 사용자'
+
+
 def review_data(item, request):
     return {'id': item.id, 'place_id': item.place_id, 'place_name': item.place.name,
-            'author_id': item.user_id, 'author_nickname': item.user.nickname,
+            'author_id': item.user_id,
+            'author_nickname': item.user.nickname if item.user_id else ANONYMOUS_AUTHOR_NAME,
             'text': item.text, 'rating': item.rating,
             'photo_url': request.build_absolute_uri(item.photo.url) if item.photo else None,
             'created_at': item.created_at, 'like_count': item.likes.count(),
             'is_liked': request.user.is_authenticated and item.likes.filter(user=request.user).exists(),
-            'is_mine': request.user.id == item.user_id, 'visit_verified': False}
+            # item.user_id가 None이고 비로그인 방문자의 request.user.id도 None이라
+            # 단순 == 비교는 탈퇴자 글을 전부 '내 글'로 만든다.
+            'is_mine': item.user_id is not None and request.user.id == item.user_id,
+            'visit_verified': False}
 
 
 def companion_data(item, request):
@@ -255,7 +263,7 @@ class NotificationsView(APIView):
 
     def get(self, request):
         items = []
-        for like in ReviewLike.objects.filter(review__user=request.user).exclude(user=request.user).select_related('user', 'review__place').order_by('-created_at')[:50]:
+        for like in ReviewLike.objects.filter(review__user=request.user, user__isnull=False).exclude(user=request.user).select_related('user', 'review__place').order_by('-created_at')[:50]:
             items.append({'id': f'like-{like.pk}', 'title': '후기 좋아요', 'body': f'{like.user.nickname}님이 {like.review.place.name} 후기를 좋아합니다.', 'created_at': like.created_at})
         for member in CompanionMember.objects.filter(companion__user=request.user).exclude(user=request.user).select_related('user', 'companion').order_by('-created_at')[:50]:
             items.append({'id': f'join-{member.pk}', 'title': '동행 참여', 'body': f'{member.user.nickname}님이 {member.companion.title}에 참여했습니다.', 'created_at': member.created_at})

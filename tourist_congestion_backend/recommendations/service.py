@@ -59,7 +59,9 @@ SCORE_KEYS = ('distance', 'category', 'crowd', 'weather', 'indoor_outdoor')
 _CANDIDATE_FIELDS = (
     'id', 'name', 'category', 'subcategory', 'address', 'latitude', 'longitude',
     'indoor_outdoor', 'indoor_outdoor_source', 'indoor_outdoor_evidence', 'open_status',
-    'info__description',
+)
+_CANDIDATE_METADATA_FIELDS = (
+    'id', 'info__description',
     'classification_record__label', 'classification_record__method',
     'classification_record__version', 'classification_record__input_hash',
     'classification_record__quote', 'classification_record__span_start',
@@ -270,7 +272,7 @@ def _profiles_for_candidates(candidates):
     )
     # Active TourAPI codes are carried by the candidate query. Keep the
     # historical candidate-derived bounds check so response metadata stays
-    # byte-for-byte compatible at bounding endpoints.
+    # byte-for-byte compatible at rounded bounding endpoints.
     if all(hasattr(place, 'tour_type_codes') for _, place in candidates):
         bounded_sources = PlaceSource.objects.filter(
             source=ExternalSource.TOUR_API,
@@ -345,6 +347,23 @@ def _candidate_rows(queryset):
             yield from rows
 
 
+def _candidate_metadata_rows(bounds):
+    """Read sparse one-to-one evidence without widening every candidate row."""
+    lat_min, lat_max, lon_min, lon_max = bounds
+    values = Place.objects.filter(
+        latitude__gte=lat_min, latitude__lte=lat_max,
+        longitude__gte=lon_min, longitude__lte=lon_max,
+    ).filter(
+        Q(classification_record__isnull=False)
+        | Q(weather_exposure_record__isnull=False),
+    ).values_list(*_CANDIDATE_METADATA_FIELDS)
+    sql, params = values.query.sql_with_params()
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        while rows := cursor.fetchmany(100):
+            yield from rows
+
+
 def _json_from_database(value):
     if not isinstance(value, str):
         return value
@@ -375,32 +394,37 @@ def _coordinate_from_database(value):
 
 
 def _candidate_place(row):
-    info = SimpleNamespace(description=row[11]) if row[11] is not None else None
-    classification = None
-    if row[12] is not None:
-        classification = SimpleNamespace(
-            label=row[12], method=row[13], version=row[14], input_hash=row[15],
-            quote=row[16], span_start=row[17], span_end=row[18],
-            evidence_quotes=_json_from_database(row[19]),
-            primary_activity=row[20], scope=row[21],
-            ancillary_note=row[22], rationale=row[23], weather_exposure=row[24],
-            weather_activity=row[25], weather_reason=row[26],
-        )
-    exposure = None
-    if row[29] is not None:
-        exposure = SimpleNamespace(
-            level=row[27], activity=row[28], source=row[29], reason=row[30],
-            conflict=bool(row[31]), conflict_reason=row[32], type_code=row[33],
-            type_name=row[34], factor=row[35], version=row[36], input_hash=row[37],
-        )
     return _CandidatePlace(
         id=row[0], name=row[1], category=row[2], subcategory=row[3], address=row[4],
         latitude=_coordinate_from_database(row[5]),
         longitude=_coordinate_from_database(row[6]), indoor_outdoor=row[7],
         indoor_outdoor_source=row[8], indoor_outdoor_evidence=row[9],
-        open_status=row[10], tour_type_codes=(), _info=info,
-        _classification_record=classification, _weather_exposure_record=exposure,
+        open_status=row[10], tour_type_codes=(), _info=None,
+        _classification_record=None, _weather_exposure_record=None,
     )
+
+
+def _attach_candidate_metadata(places, bounds):
+    for row in _candidate_metadata_rows(bounds):
+        place = places.get(row[0])
+        if place is None:
+            continue
+        place._info = SimpleNamespace(description=row[1]) if row[1] is not None else None
+        if row[2] is not None:
+            place._classification_record = SimpleNamespace(
+                label=row[2], method=row[3], version=row[4], input_hash=row[5],
+                quote=row[6], span_start=row[7], span_end=row[8],
+                evidence_quotes=_json_from_database(row[9]),
+                primary_activity=row[10], scope=row[11],
+                ancillary_note=row[12], rationale=row[13], weather_exposure=row[14],
+                weather_activity=row[15], weather_reason=row[16],
+            )
+        if row[19] is not None:
+            place._weather_exposure_record = SimpleNamespace(
+                level=row[17], activity=row[18], source=row[19], reason=row[20],
+                conflict=bool(row[21]), conflict_reason=row[22], type_code=row[23],
+                type_name=row[24], factor=row[25], version=row[26], input_hash=row[27],
+            )
 
 
 def _recommendable_places():
@@ -441,14 +465,15 @@ def _load_candidates(criteria, visit_at):
         if place is None:
             place = _candidate_place(row)
             places[place.id] = place
-        if row[38] == ExternalSource.TOUR_API:
-            type_code = _json_scalar_from_database(row[39])
+        if row[11] == ExternalSource.TOUR_API:
+            type_code = _json_scalar_from_database(row[12])
             if type_code:
                 tour_type_codes.setdefault(place.id, []).append(str(type_code).strip())
             else:
                 legacy_source_place_ids.add(place.id)
     if legacy_source_place_ids:
         tour_type_codes.update(source_codes_for(legacy_source_place_ids))
+    _attach_candidate_metadata(places, (lat_min, lat_max, lon_min, lon_max))
     candidates = []
     classification_qualities = {}
     for place in places.values():

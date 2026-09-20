@@ -69,6 +69,14 @@ class AppSession extends ChangeNotifier {
     });
   }
 
+  Future<void> withdraw(String password) async {
+    await _api.post('/me/withdraw', body: {'password': password});
+    await _clear();
+  }
+
+  Future<void> cancelWithdrawal(String email, String password) => _authenticate(
+      '/me/withdraw/cancel', {'email': email.trim(), 'password': password});
+
   Future<void> _authenticate(String path, Map<String, String> body) async {
     final data =
         Map<String, dynamic>.from(await _api.post(path, body: body) as Map);

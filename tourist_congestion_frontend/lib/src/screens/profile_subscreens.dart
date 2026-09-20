@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 import '../widgets/activity_data.dart';
 import '../widgets/app_chrome.dart';
 import 'notifications_screen.dart';
+import 'withdrawal_screen.dart';
 import 'saved_screen.dart';
 import 'recommend_screen.dart';
 
@@ -62,36 +63,8 @@ class NotificationSettingsScreen extends StatelessWidget {
 class AccountSettingsScreen extends StatelessWidget {
   const AccountSettingsScreen({super.key});
 
-  Future<void> _withdraw(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (c) => AlertDialog(
-              title: const Text('회원 탈퇴'),
-              content: const Text('탈퇴하면 저장한 장소와 여행 기록을 더 이상 볼 수 없어요.\n'
-                  '정말 탈퇴하시겠어요?'),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(c), child: const Text('취소')),
-                FilledButton(
-                    style: FilledButton.styleFrom(
-                        backgroundColor: Theme.of(c).colorScheme.error),
-                    onPressed: () => Navigator.pop(c, true),
-                    child: const Text('탈퇴하기')),
-              ],
-            ));
-    if (confirmed != true || !context.mounted) return;
-    try {
-      await ApiClient.instance.delete('/auth/withdraw');
-      await AppSession.instance.forgetSession();
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('회원 탈퇴가 완료됐어요.')));
-      // The account is gone; every signed-in screen behind this one is stale.
-      Navigator.of(context).popUntil((route) => route.isFirst);
-    } catch (e) {
-      if (context.mounted) activityError(context, e);
-    }
-  }
+  Future<void> _withdraw(BuildContext context) => Navigator.of(context)
+      .push(MaterialPageRoute<void>(builder: (_) => const WithdrawalScreen()));
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -293,8 +266,8 @@ class _AccountPreferencesState extends State<AccountPreferences> {
                             value: _notifications[item.$1] == true,
                             onChanged: _busy
                                 ? null
-                                : (v) =>
-                                    setState(() => _notifications[item.$1] = v)),
+                                : (v) => setState(
+                                    () => _notifications[item.$1] = v)),
                     ] else ...[
                       const Text('관심 지역'),
                       Wrap(

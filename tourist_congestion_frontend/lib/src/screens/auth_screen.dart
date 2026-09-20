@@ -79,8 +79,7 @@ class _AuthScreenState extends State<AuthScreen> {
         context: context,
         builder: (c) => AlertDialog(
               title: const Text('비밀번호를 잊으셨나요?'),
-              content: const Text(
-                  '지금은 앱에서 바로 비밀번호를 재설정할 수 없어요.\n'
+              content: const Text('지금은 앱에서 바로 비밀번호를 재설정할 수 없어요.\n'
                   '1:1 문의로 가입한 이메일을 알려주시면 도와드릴게요.'),
               actions: [
                 TextButton(
@@ -118,10 +117,47 @@ class _AuthScreenState extends State<AuthScreen> {
               ? '${name.isEmpty ? '' : '$name님, '}환영해요! 가입이 완료됐어요.'
               : '${name.isEmpty ? '' : '$name님, '}로그인했어요.')));
       Navigator.of(context).pop(true);
+    } on ApiException catch (e) {
+      if (e.code == 'withdrawal_pending' && mounted && !_signup) {
+        await _offerWithdrawalCancellation(e);
+      } else if (mounted) {
+        setState(() => _error = e.toString());
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _offerWithdrawalCancellation(ApiException error) async {
+    final deadline =
+        DateTime.tryParse(error.data?['purge_at'] as String? ?? '')?.toLocal();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('탈퇴 예정 계정'),
+        content: Text('탈퇴 신청을 취소하고 계정을 복구하시겠어요?'
+            '${deadline == null ? '' : '\n삭제 예정: $deadline'}'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('탈퇴 유지')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('탈퇴 취소하고 로그인')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await AppSession.instance.cancelWithdrawal(_email.text, _password.text);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('탈퇴 신청을 취소했어요.')));
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
     }
   }
 
@@ -133,8 +169,14 @@ class _AuthScreenState extends State<AuthScreen> {
     // request, instead of coming back as a server error list.
     if (RegExp(r'^\d+$').hasMatch(value)) return '숫자만으로는 사용할 수 없어요.';
     const common = {
-      '12345678', '123456789', '1234567890', 'password', 'qwerty123',
-      'abc12345', '11111111', '00000000',
+      '12345678',
+      '123456789',
+      '1234567890',
+      'password',
+      'qwerty123',
+      'abc12345',
+      '11111111',
+      '00000000',
     };
     if (common.contains(value.toLowerCase())) {
       return '너무 흔한 비밀번호예요. 다른 비밀번호를 써주세요.';

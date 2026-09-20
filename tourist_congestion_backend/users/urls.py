@@ -4,9 +4,11 @@ from . import views
 from . import activity_views as activity
 
 urlpatterns = [
-    path('notifications', activity.NotificationsView.as_view()),
+    path('notifications', activity.NotificationsView.as_view(), name='notifications'),
     path('me', activity.MeView.as_view()),
-    path('reviews', activity.ReviewsView.as_view()),
+    path('me/withdraw', views.WithdrawView.as_view(), name='withdraw'),
+    path('me/withdraw/cancel', views.WithdrawCancelView.as_view(), name='withdraw-cancel'),
+    path('reviews', activity.ReviewsView.as_view(), name='reviews'),
     path('reviews/<int:pk>', activity.ReviewDetailView.as_view()),
     path('reviews/<int:pk>/like', activity.ReviewLikeView.as_view()),
     path('companions', activity.CompanionsView.as_view()),
@@ -24,7 +26,6 @@ urlpatterns = [
     path('auth/refresh', views.RefreshView.as_view(), name='auth-refresh'),
     path('auth/logout', views.LogoutView.as_view(), name='auth-logout'),
     path('auth/password', views.PasswordChangeView.as_view(), name='auth-password'),
-    path('auth/withdraw', views.WithdrawView.as_view(), name='auth-withdraw'),
     path('auth/nickname/random', views.RandomNicknameView.as_view(), name='auth-nickname-random'),
     path('favorites', views.FavoriteListCreateView.as_view(), name='favorite-list-create'),
     path('favorites/<int:place_id>', views.FavoriteDeleteView.as_view(), name='favorite-delete'),

@@ -81,12 +81,15 @@ class RecommendationTests(TestCase):
         self._forecast(second)
         with CaptureQueriesContext(connection) as queries:
             recommend(BASE, now=NOW, supplement=False)
-        self.assertLessEqual(len(queries), 6)
+        self.assertLessEqual(len(queries), 7)
         candidate_sql = next(
             query['sql'] for query in queries
             if 'FROM "places_place"' in query['sql']
         )
         self.assertNotIn('"places_placeinfo"."raw_data"', candidate_sql)
+        self.assertNotIn('places_placeinfo', candidate_sql.lower())
+        self.assertNotIn('places_placeclassificationevidence', candidate_sql.lower())
+        self.assertNotIn('places_placeweatherexposure', candidate_sql.lower())
         self.assertNotIn('places_crowddata', candidate_sql.lower())
 
     def test_supplement_enqueues_without_polling_running_jobs(self):

@@ -53,6 +53,7 @@ cp .env.example .env
 TOUR_API_SERVICE_KEY=발급받은_한국관광공사_서비스키
 SEOUL_OPEN_API_KEY=발급받은_서울_열린데이터광장_일반키
 KMA_SERVICE_KEY=발급받은_기상청_서비스키
+VWORLD_API_KEY=발급받은_VWorld_클라이언트키
 DJANGO_ALLOWED_HOSTS=127.0.0.1,localhost
 ```
 
@@ -61,6 +62,9 @@ DJANGO_ALLOWED_HOSTS=127.0.0.1,localhost
 
 한국관광공사 키는 공공데이터포털이 제공하는 Encoding/Decoding 키 중 어느
 형태를 입력해도 클라이언트가 한 번 정규화한 뒤 요청합니다.
+
+`VWORLD_API_KEY`는 `GET /api/config` 응답으로 클라이언트에 공개됩니다. 운영 키는
+VWorld 콘솔에서 서비스의 허용 도메인이나 앱으로 사용 범위를 제한합니다.
 
 > Windows에서는 3번째 줄의 가상환경 진입 명령어가 작동하지 않습니다. 대신 `.venv\Scripts\activate`를 입력합니다.
 

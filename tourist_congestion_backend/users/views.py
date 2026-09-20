@@ -1,11 +1,13 @@
 from datetime import timedelta
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from rest_framework import status as http_status
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
@@ -13,7 +15,7 @@ from rest_framework_simplejwt.tokens import RefreshToken as SimpleJWTRefreshToke
 
 from places.models import Place
 
-from .models import Favorite, Feedback, RefreshToken, User
+from .models import Favorite, Feedback, RefreshToken, User, WithdrawnEmailHash
 from .serializers import (
     FavoriteCreateSerializer,
     FeedbackCreateSerializer,
@@ -22,8 +24,10 @@ from .serializers import (
     LoginSerializer,
     PasswordChangeSerializer,
     SignupSerializer,
+    WithdrawSerializer,
 )
-from .utils import generate_random_nickname, hash_token
+from .utils import generate_random_nickname, hash_token, hash_email_for_withdrawal
+from .withdrawal import WITHDRAWAL_GRACE_PERIOD
 
 # 같은 사용자가 같은 장소에 같은 유형의 피드백을 다시 남길 수 있게 되기까지의 대기 시간.
 # 정책 변경(3일, 일주일 등) 시 이 값만 조정한다.
@@ -51,7 +55,12 @@ def _unique_random_nickname():
     return nickname
 
 
+@transaction.atomic
 def issue_tokens(user):
+    # Serialize session creation against withdrawal/purge, including stale callers.
+    user = User.objects.select_for_update().filter(pk=user.pk).first()
+    if user is None or not user.is_active:
+        raise AuthenticationFailed('로그인할 수 없는 계정입니다.')
     # 계정당 세션 1개 정책: 새로 로그인하면 기존 refresh token은 모두 폐기한다.
     RefreshToken.objects.filter(user=user).delete()
 
@@ -65,6 +74,18 @@ def issue_tokens(user):
     )
 
     return {'access_token': str(jwt_access), 'refresh_token': str(jwt_refresh)}
+
+
+def verify_google_identity(raw_id_token):
+    """구글 id_token을 검증해 payload를 돌려준다. 실패하면 None."""
+    try:
+        return google_id_token.verify_oauth2_token(
+            raw_id_token,
+            google_requests.Request(),
+            settings.GOOGLE_CLIENT_ID,
+        )
+    except ValueError:
+        return None
 
 
 class SignupView(APIView):
@@ -86,6 +107,11 @@ class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if not serializer.is_valid():
+            # authenticate()는 is_active가 False인 탈퇴 유예 계정도 거부한다.
+            # 본인이 맞다면 일반 401 대신 복구 안내를 준다.
+            pending = _pending_withdrawal_account(request.data)
+            if pending is not None:
+                return _withdrawal_pending_response(pending)
             return error_response(
                 '이메일 또는 비밀번호가 올바르지 않습니다.',
                 http_status.HTTP_401_UNAUTHORIZED,
@@ -104,17 +130,14 @@ class GoogleLoginView(APIView):
         if not serializer.is_valid():
             return error_response(serializer.errors)
 
-        try:
-            payload = google_id_token.verify_oauth2_token(
-                serializer.validated_data['id_token'],
-                google_requests.Request(),
-                settings.GOOGLE_CLIENT_ID,
-            )
-        except ValueError:
+        payload = verify_google_identity(serializer.validated_data['id_token'])
+        if payload is None:
             return error_response('구글 인증에 실패했습니다.', http_status.HTTP_401_UNAUTHORIZED)
 
         google_sub = payload['sub']
         email = payload.get('email')
+        if not email:
+            return error_response('구글 이메일을 확인할 수 없습니다.', http_status.HTTP_401_UNAUTHORIZED)
 
         user = User.objects.filter(
             provider=User.Provider.GOOGLE,
@@ -123,8 +146,13 @@ class GoogleLoginView(APIView):
         created = False
 
         if user is None:
-            user = User.objects.filter(email=email).first()
+            user = User.objects.filter(email__iexact=email).first()
             if user is None:
+                if WithdrawnEmailHash.objects.filter(
+                    email_hash=hash_email_for_withdrawal(email),
+                    expires_at__gte=timezone.now().date(),
+                ).exists():
+                    return error_response('지금은 이 이메일로 가입할 수 없습니다.')
                 user = User(
                     email=email,
                     nickname=_unique_random_nickname(),
@@ -136,9 +164,13 @@ class GoogleLoginView(APIView):
                 user.save()
                 created = True
             else:
+                if not user.is_active:
+                    return _withdrawal_pending_response(user)
                 user.provider_user_id = google_sub
                 user.save(update_fields=['provider_user_id'])
 
+        if not user.is_active:
+            return _withdrawal_pending_response(user)
         tokens = issue_tokens(user)
         message = '회원가입이 완료되었습니다.' if created else '로그인되었습니다.'
         response_status = http_status.HTTP_201_CREATED if created else http_status.HTTP_200_OK
@@ -161,6 +193,7 @@ class RefreshView(APIView):
         stored = RefreshToken.objects.filter(
             token_hash=hash_token(raw_refresh_token),
             user_id=jwt_refresh['user_id'],
+            user__status=User.Status.ACTIVE,
         ).first()
 
         if stored is None or stored.expires_at <= timezone.now():
@@ -198,19 +231,6 @@ class PasswordChangeView(APIView):
         # Every stored session used the old credential; force a fresh sign-in.
         RefreshToken.objects.filter(user=request.user).delete()
         return success_response(message='비밀번호를 변경했어요. 다시 로그인해 주세요.')
-
-
-class WithdrawView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def delete(self, request):
-        user = request.user
-        # Withdrawn accounts fail is_active, so authenticate() rejects them while
-        # reviews and companion history keep pointing at a valid row.
-        user.status = User.Status.WITHDRAWN
-        user.save(update_fields=['status', 'updated_at'])
-        RefreshToken.objects.filter(user=user).delete()
-        return success_response(message='회원 탈퇴가 완료되었어요.')
 
 
 class RandomNicknameView(APIView):
@@ -293,3 +313,101 @@ class FeedbackListCreateView(APIView):
             '피드백이 등록되었습니다.',
             http_status.HTTP_201_CREATED,
         )
+
+
+def _identity_confirmed(user, data):
+    """탈퇴·철회 직전 본인 확인. 가입 경로에 맞는 수단만 인정한다."""
+    if user.provider == User.Provider.GOOGLE:
+        payload = verify_google_identity(data.get('id_token') or '')
+        return payload is not None and payload.get('sub') == user.provider_user_id
+    return user.check_password(data.get('password') or '')
+
+
+def _withdrawal_pending_response(user):
+    if (user.status != User.Status.WITHDRAWN or user.purge_at is None
+            or user.purge_at <= timezone.now()):
+        return error_response('로그인할 수 없는 계정입니다.', http_status.HTTP_403_FORBIDDEN)
+    return Response({
+        'success': False,
+        'data': {'code': 'withdrawal_pending', 'purge_at': user.purge_at.isoformat()},
+        'message': '탈퇴 예정 계정입니다. 기한 내 본인 확인 후 탈퇴를 취소할 수 있습니다.',
+    }, status=http_status.HTTP_403_FORBIDDEN)
+
+
+def _pending_withdrawal_account(data):
+    """탈퇴 유예 중이면서 본인 확인에 성공한 계정을 돌려준다. 아니면 None.
+
+    본인 확인이 끝난 뒤에만 탈퇴 사실을 알려 준다. 먼저 알려 주면 남의 이메일로
+    탈퇴 여부를 캐낼 수 있다.
+    """
+    email = (data.get('email') or '').strip().lower()
+    if not email:
+        return None
+    user = User.objects.filter(email__iexact=email, status=User.Status.WITHDRAWN).first()
+    if user is None or not _identity_confirmed(user, data):
+        return None
+    return user
+
+
+class WithdrawView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        serializer = WithdrawSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(serializer.errors)
+
+        user = User.objects.select_for_update().filter(pk=request.user.pk).first()
+        if user is None or not user.is_active:
+            return error_response('로그인할 수 없는 계정입니다.', http_status.HTTP_401_UNAUTHORIZED)
+        if not _identity_confirmed(user, serializer.validated_data):
+            return error_response('본인 확인에 실패했습니다.', http_status.HTTP_401_UNAUTHORIZED)
+
+        with transaction.atomic():
+            user.status = User.Status.WITHDRAWN
+            user.purge_at = timezone.now() + WITHDRAWAL_GRACE_PERIOD
+            user.withdrawal_reason_code = serializer.validated_data.get('reason_code') or None
+            user.save(update_fields=['status', 'purge_at', 'withdrawal_reason_code', 'updated_at'])
+            # 모든 기기에서 즉시 로그아웃시킨다. 유예를 기다리지 않는다.
+            RefreshToken.objects.filter(user=user).delete()
+
+        return success_response(
+            {'purge_at': user.purge_at.isoformat()},
+            '탈퇴가 접수되었습니다. 7일 이내에 로그인하시면 취소할 수 있습니다.',
+        )
+
+
+class WithdrawCancelView(APIView):
+    # 유예 중에는 로그인이 막혀 있어 인증 헤더를 받을 수 없다. 자격 증명을 직접 받는다.
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    @transaction.atomic
+    def post(self, request):
+        # Lock before checking credentials/deadline: never restore a stale snapshot.
+        email = str(request.data.get('email') or '').strip()
+        user = User.objects.select_for_update().filter(
+            email__iexact=email, status=User.Status.WITHDRAWN,
+        ).first()
+        if user is not None and not _identity_confirmed(user, request.data):
+            user = None
+        if user is None:
+            return error_response(
+                '이메일 또는 비밀번호가 올바르지 않습니다.',
+                http_status.HTTP_401_UNAUTHORIZED,
+            )
+        if user.purge_at is None or user.purge_at <= timezone.now():
+            # 배치 실행 시각에 따라 결과가 달라지지 않도록, 기한이 지나면 거부한다.
+            return error_response(
+                '이미 파기 절차가 시작되어 복구할 수 없습니다.',
+                http_status.HTTP_409_CONFLICT,
+            )
+
+        user.status = User.Status.ACTIVE
+        user.purge_at = None
+        user.withdrawal_reason_code = None
+        user.save(update_fields=['status', 'purge_at', 'withdrawal_reason_code', 'updated_at'])
+
+        tokens = issue_tokens(user)
+        return success_response(tokens, '탈퇴가 취소되었습니다.')
