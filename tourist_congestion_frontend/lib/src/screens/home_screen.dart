@@ -102,7 +102,11 @@ class _HomeScreenState extends State<HomeScreen> {
         IconButton(
             tooltip: '알림',
             onPressed: () async {
-              if (!await ensureSignedIn(context) || !context.mounted) return;
+              if (!await ensureSignedIn(context,
+                      reason: '알림을 보려면 로그인이 필요해요.') ||
+                  !context.mounted) {
+                return;
+              }
               await Navigator.push(
                   context,
                   MaterialPageRoute<void>(

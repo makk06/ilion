@@ -1,17 +1,26 @@
 import 'package:flutter/material.dart';
 
+import '../services/api_client.dart';
 import '../services/app_session.dart';
+import '../theme/app_theme.dart';
 import '../widgets/app_chrome.dart';
+import 'profile_places_screens.dart';
 
-Future<bool> ensureSignedIn(BuildContext context) async {
+/// Returns to the caller's screen once signed in, so a gated action can resume
+/// where it started. [reason] tells the visitor which action needs the account.
+Future<bool> ensureSignedIn(BuildContext context, {String? reason}) async {
   if (AppSession.instance.isAuthenticated) return true;
-  return await Navigator.of(context)
-          .push<bool>(MaterialPageRoute(builder: (_) => const AuthScreen())) ??
+  return await Navigator.of(context).push<bool>(
+          MaterialPageRoute(builder: (_) => AuthScreen(reason: reason))) ??
       false;
 }
 
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key});
+  const AuthScreen({super.key, this.reason});
+
+  /// Shown above the form, e.g. '후기를 남기려면 로그인이 필요해요.'
+  final String? reason;
+
   @override
   State<AuthScreen> createState() => _AuthScreenState();
 }
@@ -23,6 +32,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final _nickname = TextEditingController();
   bool _signup = false;
   bool _busy = false;
+  bool _nicknameBusy = false;
   bool _obscure = true;
   String? _error;
 
@@ -32,6 +42,57 @@ class _AuthScreenState extends State<AuthScreen> {
     _password.dispose();
     _nickname.dispose();
     super.dispose();
+  }
+
+  void _toggleMode() {
+    // Swapping modes adds or removes a field, so stale validation state would
+    // otherwise be reused by the field that takes its place.
+    _form.currentState?.reset();
+    setState(() {
+      _signup = !_signup;
+      _error = null;
+    });
+  }
+
+  Future<void> _suggestNickname() async {
+    setState(() => _nicknameBusy = true);
+    try {
+      final data = Map<String, dynamic>.from(
+          await ApiClient.instance.get('/auth/nickname/random') as Map);
+      final suggestion = data['nickname'] as String?;
+      if (suggestion != null && mounted) {
+        _nickname.text = suggestion;
+        _form.currentState?.validate();
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('닉네임을 불러오지 못했어요. 직접 입력해 주세요.')));
+      }
+    } finally {
+      if (mounted) setState(() => _nicknameBusy = false);
+    }
+  }
+
+  Future<void> _forgotPassword() async {
+    final goToHelp = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+              title: const Text('비밀번호를 잊으셨나요?'),
+              content: const Text(
+                  '지금은 앱에서 바로 비밀번호를 재설정할 수 없어요.\n'
+                  '1:1 문의로 가입한 이메일을 알려주시면 도와드릴게요.'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(c), child: const Text('닫기')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(c, true),
+                    child: const Text('문의하기')),
+              ],
+            ));
+    if (goToHelp != true || !mounted) return;
+    await Navigator.push(
+        context, MaterialPageRoute<void>(builder: (_) => const HelpScreen()));
   }
 
   Future<void> _submit() async {
@@ -47,12 +108,38 @@ class _AuthScreenState extends State<AuthScreen> {
       } else {
         await AppSession.instance.login(_email.text, _password.text);
       }
-      if (mounted) Navigator.of(context).pop(true);
+      if (!mounted) return;
+      final name = (AppSession.instance.profile?['nickname'] as String?) ??
+          (_signup ? _nickname.text.trim() : '');
+      // The messenger lives above this route, so the confirmation survives the
+      // pop back to whichever screen asked for the sign-in.
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(_signup
+              ? '${name.isEmpty ? '' : '$name님, '}환영해요! 가입이 완료됐어요.'
+              : '${name.isEmpty ? '' : '$name님, '}로그인했어요.')));
+      Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) return '비밀번호를 입력해 주세요.';
+    if (!_signup) return null;
+    if (value.length < 8) return '8자 이상 입력해 주세요.';
+    // Mirrors the server's validators so a weak password is caught before the
+    // request, instead of coming back as a server error list.
+    if (RegExp(r'^\d+$').hasMatch(value)) return '숫자만으로는 사용할 수 없어요.';
+    const common = {
+      '12345678', '123456789', '1234567890', 'password', 'qwerty123',
+      'abc12345', '11111111', '00000000',
+    };
+    if (common.contains(value.toLowerCase())) {
+      return '너무 흔한 비밀번호예요. 다른 비밀번호를 써주세요.';
+    }
+    return null;
   }
 
   @override
@@ -62,11 +149,31 @@ class _AuthScreenState extends State<AuthScreen> {
             child: AutofillGroup(
                 child: Form(
                     key: _form,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     child:
                         ListView(padding: const EdgeInsets.all(24), children: [
+                      if (widget.reason != null) ...[
+                        Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                                color: AppColors.primarySoft,
+                                borderRadius: BorderRadius.circular(12)),
+                            child: Row(children: [
+                              const Icon(Icons.lock_outline_rounded,
+                                  size: 18, color: AppColors.primary),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                  child: Text(widget.reason!,
+                                      style: const TextStyle(
+                                          fontSize: 13,
+                                          color: AppColors.primary))),
+                            ])),
+                        const SizedBox(height: 20),
+                      ],
                       const Text('즐겨찾기와 여행 기록을 계정에 저장하세요.'),
                       const SizedBox(height: 24),
                       TextFormField(
+                          key: const ValueKey('auth-email'),
                           controller: _email,
                           enabled: !_busy,
                           keyboardType: TextInputType.emailAddress,
@@ -80,16 +187,31 @@ class _AuthScreenState extends State<AuthScreen> {
                       const SizedBox(height: 16),
                       if (_signup) ...[
                         TextFormField(
+                            key: const ValueKey('auth-nickname'),
                             controller: _nickname,
                             enabled: !_busy,
                             maxLength: 30,
-                            decoration: const InputDecoration(labelText: '닉네임'),
+                            decoration: InputDecoration(
+                                labelText: '닉네임',
+                                suffixIcon: IconButton(
+                                    tooltip: '랜덤 닉네임 받기',
+                                    onPressed: _busy || _nicknameBusy
+                                        ? null
+                                        : _suggestNickname,
+                                    icon: _nicknameBusy
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                                strokeWidth: 2))
+                                        : const Icon(Icons.casino_outlined))),
                             validator: (v) => v == null || v.trim().isEmpty
                                 ? '닉네임을 입력해 주세요.'
                                 : null),
                         const SizedBox(height: 16),
                       ],
                       TextFormField(
+                          key: const ValueKey('auth-password'),
                           controller: _password,
                           enabled: !_busy,
                           obscureText: _obscure,
@@ -111,12 +233,15 @@ class _AuthScreenState extends State<AuthScreen> {
                                   icon: Icon(_obscure
                                       ? Icons.visibility
                                       : Icons.visibility_off))),
-                          validator: (v) => v == null || v.isEmpty
-                              ? '비밀번호를 입력해 주세요.'
-                              : _signup && v.length < 8
-                                  ? '8자 이상 입력해 주세요.'
-                                  : null,
+                          validator: _validatePassword,
                           onFieldSubmitted: (_) => _submit()),
+                      if (!_signup)
+                        Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                                onPressed: _busy ? null : _forgotPassword,
+                                child: const Text('비밀번호를 잊으셨나요?',
+                                    style: TextStyle(fontSize: 12)))),
                       if (_error != null)
                         Padding(
                             padding: const EdgeInsets.only(top: 16),
@@ -133,12 +258,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                   ? '회원가입'
                                   : '로그인')),
                       TextButton(
-                          onPressed: _busy
-                              ? null
-                              : () => setState(() {
-                                    _signup = !_signup;
-                                    _error = null;
-                                  }),
+                          onPressed: _busy ? null : _toggleMode,
                           child: Text(_signup ? '이미 계정이 있어요 · 로그인' : '계정 만들기')),
                     ])))),
       );

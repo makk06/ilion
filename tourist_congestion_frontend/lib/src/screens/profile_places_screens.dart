@@ -380,7 +380,11 @@ class HelpScreen extends StatelessWidget {
         ]),
         OutlinedButton(
             onPressed: () async {
-              if (!await ensureSignedIn(context) || !context.mounted) return;
+              if (!await ensureSignedIn(context,
+                      reason: '1:1 문의를 남기려면 로그인이 필요해요.') ||
+                  !context.mounted) {
+                return;
+              }
               await Navigator.push(
                   context,
                   MaterialPageRoute<void>(

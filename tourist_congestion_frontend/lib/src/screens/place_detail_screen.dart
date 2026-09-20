@@ -332,9 +332,16 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                                                         ],
                                                         if (_place.crowdLevel ==
                                                             null)
-                                                          const Text(
-                                                              '이 장소의 혼잡도 관측 자료가 없습니다.',
-                                                              style: TextStyle(
+                                                          // The badge above already shows an estimate when one
+                                                          // exists; saying "no data" beside it reads as a
+                                                          // contradiction, so name the estimate instead.
+                                                          Text(
+                                                              _place.crowdEstimate
+                                                                          ?.available ==
+                                                                      true
+                                                                  ? '실시간 관측 자료가 없어 장소 특성으로 추정한 값이에요.'
+                                                                  : '이 장소의 혼잡도 관측 자료가 없습니다.',
+                                                              style: const TextStyle(
                                                                   color: Color(
                                                                       0xFF7A8980),
                                                                   fontSize:

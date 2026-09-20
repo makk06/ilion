@@ -170,6 +170,11 @@ class AppSession extends ChangeNotifier {
     await _clear();
   }
 
+  /// Drops the local session without calling the server. Used after a request
+  /// that already revoked every token, such as a password change or withdrawal,
+  /// where a logout call would only fail on the now-invalid credential.
+  Future<void> forgetSession() => _clear();
+
   Future<void> _clear() async {
     _generation++;
     _api.accessToken = null;

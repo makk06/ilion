@@ -35,7 +35,10 @@ class _CompanionFormScreenState extends State<CompanionFormScreen> {
       activityError(context, const ApiException('장소, 제목과 내용을 모두 입력해 주세요.'));
       return;
     }
-    if (!await ensureSignedIn(context) || !mounted) return;
+    if (!await ensureSignedIn(context, reason: '동행을 모집하려면 로그인이 필요해요.') ||
+        !mounted) {
+      return;
+    }
     setState(() => _busy = true);
     try {
       await ApiClient.instance.post('/companions', body: {

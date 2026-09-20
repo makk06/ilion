@@ -50,7 +50,10 @@ class _ReviewFeedState extends State<ReviewFeed> {
   static const _muted = AppColors.textMuted;
 
   Future<void> _edit([Map<String, dynamic>? review]) async {
-    if (!await ensureSignedIn(context) || !mounted) return;
+    if (!await ensureSignedIn(context, reason: '후기를 남기려면 로그인이 필요해요.') ||
+        !mounted) {
+      return;
+    }
     await Navigator.push(
         context,
         MaterialPageRoute<bool>(
@@ -64,7 +67,10 @@ class _ReviewFeedState extends State<ReviewFeed> {
   }
 
   Future<void> _act(Map<String, dynamic> review, String action) async {
-    if (!await ensureSignedIn(context) || !mounted) return;
+    if (!await ensureSignedIn(context, reason: '후기에 반응하려면 로그인이 필요해요.') ||
+        !mounted) {
+      return;
+    }
     final id = review['id'] as int;
     if (_busy.contains(id)) return;
     if (action == 'delete') {
