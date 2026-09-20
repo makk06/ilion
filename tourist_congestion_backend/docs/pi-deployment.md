@@ -42,6 +42,29 @@ VWorld 콘솔에서 허용 도메인이나 앱을 서비스 범위로 제한한�
 
 승인된 migration은 `deploy.json`의 `DJANGO_MIGRATION_TARGET`과 코드에 고정된 전체 미적용 순서가 정확히 일치할 때만 적용한다. 적용 전 SQLite backup API로 `/data/migration-backups`에 일관된 복사본을 만들고 `PRAGMA quick_check`를 통과시킨다. 적용 뒤에도 전체 migration 상태와 DB 무결성을 다시 검사한다. 현재 허용 대상 `config.0001_merge_main_recommendation`은 운영 리비전 `3d0ef38`의 스키마에서 최신 `main`의 혼잡도·사용자 모델과 병합 경계를 순서대로 적용한다. 예상하지 않은 migration이 하나라도 함께 대기하면 컨테이너 시작을 거부한다. 백업은 자동 삭제하지 않는다. 이미지 롤백은 SQLite와 적용된 migration을 되돌리지 않는다.
 
+### 회원 탈퇴 기능 배포 (2026-09-18 추가)
+
+탈퇴 기능은 migration 두 건(`users.0006`, `users.0007`)을 추가한다. 승인 대상
+`users.0007_favorite_actor_feedback_actor_recentplace_actor_and_more`로 `APPROVED_MIGRATION_PLANS`에
+등록되어 있다.
+
+**순서가 중요하다.** 이 승인 계획은 대기 목록이 위 두 건**뿐일 때만** 일치한다. 즉 운영 DB가
+직전 대상 `config.0001_merge_main_recommendation`을 이미 적용한 상태여야 한다.
+
+| 운영 DB 상태 | `deploy.json`의 `DJANGO_MIGRATION_TARGET` |
+|---|---|
+| `config.0001_merge_main_recommendation` 미적용 | 먼저 해당 마이그레이션을 포함한 이전 릴리스로 업그레이드; 이 릴리스는 기동 거부 |
+| 적용 완료 | `users.0007_favorite_actor_feedback_actor_recentplace_actor_and_more`로 변경 |
+
+두 단계를 한 번에 합치려면 두 계획을 이어붙인 새 승인 계획을 `runtime.py`에 추가해야 한다.
+`deploy.json`은 이제 users.0007을 가리킨다. **main 병합은 운영 DB 업그레이드나 배포 승인이 아니다.**
+배포 담당자는 현재 DB의 적용 이력을 먼저 확인해야 한다. 오래된 DB에 최신 코드를 놓고
+구 대상 문자열만 지정하는 방식은 남은 migration 검사 때문에 허용되지 않는다.
+
+환경변수 `WITHDRAWAL_HASH_KEY`(50자 이상, `DJANGO_SECRET_KEY`와 다른 값)도 함께 설정한다.
+설정하지 않으면 `DEBUG=false`에서 기동이 거부된다.
+`deploy.json.requiredSecrets`에도 이름만 등록되어 있으며 실제 값은 저장소에 포함하지 않는다.
+
 기존 테스트 SQLite를 이전하려면 별도의 운영 DB 복원 절차를 마련해야 한다. 실행 중 파일을 단순 복사하지 말고 SQLite backup으로 일관된 복사본을 만든다. 현재 배포에는 사용자·세션·테스트 시드를 옮기는 절차가 포함되지 않는다.
 
 ## 예약과 호출 예산

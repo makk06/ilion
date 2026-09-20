@@ -22,6 +22,12 @@ APPROVED_MIGRATION_PLANS = {
         ('places', '0011_merge_20260917_1750'),
         ('config', '0001_merge_main_recommendation'),
     ),
+    # 회원 탈퇴 기능. 직전 계획(config.0001_merge_main_recommendation)까지 적용된
+    # 운영 DB에서만 대기 목록이 이 두 건과 정확히 일치한다.
+    'users.0007_favorite_actor_feedback_actor_recentplace_actor_and_more': (
+        ('users', '0006_anonymousactor_withdrawalreason_withdrawnemailhash_and_more'),
+        ('users', '0007_favorite_actor_feedback_actor_recentplace_actor_and_more'),
+    ),
 }
 
 

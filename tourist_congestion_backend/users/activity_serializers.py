@@ -10,8 +10,8 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'nickname', 'profile_image_url', 'preferred_categories', 'preferences']
-        read_only_fields = ['id', 'email', 'profile_image_url']
+        fields = ['id', 'email', 'nickname', 'provider', 'profile_image_url', 'preferred_categories', 'preferences']
+        read_only_fields = ['id', 'email', 'provider', 'profile_image_url']
 
 
 class ReviewSerializer(serializers.ModelSerializer):

@@ -38,6 +38,16 @@ DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() == 'true'
 if not DEBUG and (SECRET_KEY.startswith('django-insecure-') or len(SECRET_KEY) < 50):
     raise ImproperlyConfigured('Set a production DJANGO_SECRET_KEY of at least 50 characters.')
 
+# 탈퇴 이메일 해시 전용 키. SECRET_KEY와 분리한다 — SECRET_KEY가 교체되면
+# 재가입 차단이 조용히 무력화되기 때문이다.
+WITHDRAWAL_HASH_KEY = os.environ.get('WITHDRAWAL_HASH_KEY', '')
+if not DEBUG and len(WITHDRAWAL_HASH_KEY) < 50:
+    raise ImproperlyConfigured('Set a production WITHDRAWAL_HASH_KEY of at least 50 characters.')
+if not DEBUG and WITHDRAWAL_HASH_KEY == SECRET_KEY:
+    raise ImproperlyConfigured('WITHDRAWAL_HASH_KEY must differ from DJANGO_SECRET_KEY.')
+if not WITHDRAWAL_HASH_KEY:
+    WITHDRAWAL_HASH_KEY = SECRET_KEY
+
 APP_BASE_URL = os.environ.get('APP_BASE_URL', '').rstrip('/')
 STORAGE_DIR = Path(os.environ.get('STORAGE_DIR') or BASE_DIR)
 DATA_WORKER_ENABLED = os.environ.get('DATA_WORKER_ENABLED', 'false').lower() == 'true'
