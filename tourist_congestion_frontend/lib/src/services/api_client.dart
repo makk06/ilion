@@ -21,7 +21,7 @@ class ApiClient {
       : _client = client ?? http.Client(),
         baseUrl = (baseUrl ??
                 const String.fromEnvironment('API_BASE_URL',
-                    defaultValue: 'http://127.0.0.1:8000/api'))
+                    defaultValue: 'https://ilion.app.hurdoo.kr/api'))
             .replaceFirst(RegExp(r'/+$'), '');
 
   static ApiClient instance = ApiClient();
