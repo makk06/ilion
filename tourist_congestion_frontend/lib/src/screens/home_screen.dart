@@ -219,22 +219,23 @@ class _HomeScreenState extends State<HomeScreen> {
                             });
                             _load();
                           })),
-                      OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                              fixedSize: const Size.fromHeight(36),
-                              minimumSize: const Size(0, 36),
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 10),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              visualDensity: VisualDensity.standard,
-                              textStyle: const TextStyle(
-                                  fontSize: 12, fontWeight: FontWeight.w500),
-                              side: const BorderSide(color: AppColors.border),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20))),
-                          onPressed: _loading ? null : _locate,
-                          icon: const Icon(Icons.my_location, size: 16),
-                          label: const Text('내 주변 10km'))
+                      if (deviceLocationEnabled)
+                        OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                                fixedSize: const Size.fromHeight(36),
+                                minimumSize: const Size(0, 36),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 10),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.standard,
+                                textStyle: const TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.w500),
+                                side: const BorderSide(color: AppColors.border),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20))),
+                            onPressed: _loading ? null : _locate,
+                            icon: const Icon(Icons.my_location, size: 16),
+                            label: const Text('내 주변 10km'))
                     ]),
                 const SizedBox(height: 20),
                 Text(_nearby ? '내 주변 여행지' : '어디로 떠나볼까요?',
