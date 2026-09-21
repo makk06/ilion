@@ -17,7 +17,7 @@ val keystoreProperties = Properties().apply {
 val hasReleaseKeystore = keystorePropertiesFile.exists()
 
 android {
-    namespace = "kr.hurdoo.ilion"
+    namespace = "kr.hurdoo.app.ilion"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -28,7 +28,7 @@ android {
 
     defaultConfig {
         // 스토어 등록 후에는 변경할 수 없다.
-        applicationId = "kr.hurdoo.ilion"
+        applicationId = "kr.hurdoo.app.ilion"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

@@ -1,4 +1,4 @@
-package kr.hurdoo.ilion
+package kr.hurdoo.app.ilion
 
 import io.flutter.embedding.android.FlutterActivity
 

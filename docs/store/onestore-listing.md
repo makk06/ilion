@@ -83,7 +83,7 @@
 
 | 항목 | 선택 | 이유 |
 |---|---|---|
-| 패키지 네임 | `kr.hurdoo.ilion` | 빌드와 동일. 등록 후 변경 불가 |
+| 패키지 네임 | `kr.hurdoo.app.ilion` | 빌드와 동일. 등록 후 변경 불가 |
 | 서비스 구분 | 정식 출시 | 베타를 원하면 베타 선택 |
 | 광고 SDK 적용 | 미적용 | 광고 SDK 없음 |
 | Android Auto | 미적용 | |
@@ -94,7 +94,7 @@
 | 접근권한 | 인터넷만 사용 (사용자 동의가 필요한 권한 없음) | 사진은 시스템 사진 선택기를 사용해 권한 불필요 |
 
 업로드 파일: `tourist_congestion_frontend/build/app/outputs/flutter-apk/app-release.apk`
-- 패키지 `kr.hurdoo.ilion` · versionName 1.0.0 · versionCode 1 · targetSdk 36
+- 패키지 `kr.hurdoo.app.ilion` · versionName 1.0.0 · versionCode 1 · targetSdk 36
 - 서명 인증서 SHA-256: `b362ee987efd0665a70863fae71ef5505b7174fa673baec06428aad8f9bc0563`
 
 ## 4. 제출 전 결정·확인이 필요한 것
