@@ -56,10 +56,15 @@ class SignupSerializer(serializers.ModelSerializer):
         write_only=True,
         error_messages={'required': '이용약관에 동의해 주세요.'},
     )
+    # 개인정보 수집·이용 동의. 약관 동의와 따로 받아야 한다(원스토어 검증 요구).
+    agree_privacy = serializers.BooleanField(
+        write_only=True,
+        error_messages={'required': '개인정보 수집·이용에 동의해 주세요.'},
+    )
 
     class Meta:
         model = User
-        fields = ['email', 'password', 'nickname', 'age_over_14', 'agree_terms']
+        fields = ['email', 'password', 'nickname', 'age_over_14', 'agree_terms', 'agree_privacy']
 
     def validate_age_over_14(self, value):
         if value is not True:
@@ -69,6 +74,11 @@ class SignupSerializer(serializers.ModelSerializer):
     def validate_agree_terms(self, value):
         if value is not True:
             raise serializers.ValidationError('이용약관에 동의해야 가입할 수 있어요.')
+        return value
+
+    def validate_agree_privacy(self, value):
+        if value is not True:
+            raise serializers.ValidationError('개인정보 수집·이용에 동의해야 가입할 수 있어요.')
         return value
 
     def validate_email(self, value):
@@ -85,6 +95,7 @@ class SignupSerializer(serializers.ModelSerializer):
         password = validated_data.pop('password')
         validated_data.pop('age_over_14')
         validated_data.pop('agree_terms')
+        validated_data.pop('agree_privacy')
         now = timezone.now()
         user = User(
             provider=User.Provider.EMAIL,

@@ -62,13 +62,16 @@ class AppSession extends ChangeNotifier {
   }
 
   Future<void> signup(String email, String password, String nickname,
-      {required bool ageOver14, required bool agreeTerms}) async {
+      {required bool ageOver14,
+      required bool agreeTerms,
+      required bool agreePrivacy}) async {
     await _authenticate('/auth/signup', {
       'email': email.trim(),
       'password': password,
       'nickname': nickname.trim(),
       'age_over_14': ageOver14,
       'agree_terms': agreeTerms,
+      'agree_privacy': agreePrivacy,
     });
   }
 

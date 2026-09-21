@@ -29,6 +29,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     preferences = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=10, choices=Status, default=Status.ACTIVE)
     # 가입 시 본인이 확인한 사항. 약관 문서가 바뀌면 terms_version 으로 구분한다.
+    # 이용약관과 개인정보 수집·이용 동의는 둘 다 필수라 terms_agreed_at 하나에 함께 기록한다.
     age_confirmed_at = models.DateTimeField(null=True, blank=True)
     terms_agreed_at = models.DateTimeField(null=True, blank=True)
     terms_version = models.CharField(max_length=20, blank=True, default='')
