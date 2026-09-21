@@ -1,5 +1,7 @@
 # 회원 탈퇴 기능 Implementation Plan
 
+> **2026-09-21 참고:** 아래는 최초 구현 계획의 이력입니다. 후속 변경에서 계정 최종 파기 시 현재 첨부 사진 삭제를 추가했습니다. 현재 처리 계약과 미완료 항목은 [최신 준비 상태](../../legal/README.md)를 우선합니다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 회원 탈퇴 기능을 만들고, 탈퇴자의 행동 데이터를 복원 불가능하게 익명화해 알고리즘 학습용으로 보존한다.
