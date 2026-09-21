@@ -9,7 +9,7 @@ import subprocess
 import sys
 import time
 
-from config.backups import BACKUP_DIRECTORY_NAME, prune_database_backups
+from config.backups import BACKUP_DIRECTORY_NAME
 
 
 APPROVED_MIGRATION_PLANS = {
@@ -139,8 +139,6 @@ def initialize_database(storage):
     subprocess.run([sys.executable, 'manage.py', 'migrate', '--check'], check=True)
     with sqlite3.connect(database) as connection:
         connection.execute('PRAGMA journal_mode=WAL')
-    for removed in prune_database_backups(storage):
-        print(f'runtime: expired database backup removed {removed.name}', flush=True)
 
 
 def main():
