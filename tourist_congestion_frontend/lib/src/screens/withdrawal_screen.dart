@@ -58,10 +58,11 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
             const Text('탈퇴 전 확인해 주세요.',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
-            const Text('신청 즉시 로그아웃되며, 7일 후 계정이 삭제됩니다.\n'
+            const Text('신청 즉시 로그아웃되며, 7일 후 계정 파기 대상이 됩니다.\n'
                 '7일 이내 로그인 화면에서 본인 확인 후 탈퇴를 취소할 수 있습니다.\n\n'
-                '후기·사진과 일부 활동 데이터는 계정 연결을 제거한 뒤 보존됩니다. '
-                '후기나 사진에 개인정보가 있다면 탈퇴 전에 직접 삭제해 주세요.\n\n'
+                '후기에 첨부된 사진은 7일 유예기간 동안 유지되며, 계정 최종 파기 시 삭제됩니다.\n'
+                '후기 글·평점과 일부 활동 데이터는 계정 연결을 제거한 뒤 보존됩니다. '
+                '후기 글에 개인정보가 있다면 탈퇴 전에 수정하거나 삭제해 주세요.\n\n'
                 '계정 삭제 후에는 같은 이메일로 30일간 재가입할 수 없습니다.'),
             const SizedBox(height: 24),
             if (google)

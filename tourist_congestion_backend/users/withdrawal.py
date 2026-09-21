@@ -51,12 +51,20 @@ def purge_withdrawn_users(now=None):
 
 
 def _purge_one(user, now):
+    # Delete storage objects BEFORE severing their owner's DB references. A
+    # storage failure rolls back this account so the next batch can retry it.
+    # Storage is not transactional: after a later DB failure a file can already
+    # be gone. FileSystemStorage.delete tolerates missing files on the retry.
+    # This runs only after the cancellation deadline, never during the grace.
+    for review in Review.objects.filter(user=user).exclude(photo='').iterator():
+        review.photo.delete(save=False)
+
     actor = AnonymousActor.objects.create()
 
     # 보존 대상: 소유자를 익명 주체로 바꾼다. user와 actor를 한 번에 써야
     # XOR 제약을 만족한다.
     Feedback.objects.filter(user=user).update(user=None, actor=actor, memo=None)
-    Review.objects.filter(user=user).update(user=None, actor=actor)
+    Review.objects.filter(user=user).update(user=None, actor=actor, photo='')
     ReviewLike.objects.filter(user=user).update(user=None, actor=actor)
     Favorite.objects.filter(user=user).update(user=None, actor=actor)
     RecentPlace.objects.filter(user=user).update(user=None, actor=actor)

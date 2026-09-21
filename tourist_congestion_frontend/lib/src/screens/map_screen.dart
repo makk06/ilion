@@ -87,10 +87,11 @@ class _MapScreenState extends State<MapScreen> {
                 title: '지도 탐색',
                 leading: BackButton(onPressed: _close),
                 actions: [
-                  IconButton(
-                      tooltip: '현재 위치',
-                      onPressed: _locating ? null : _locate,
-                      icon: const Icon(Icons.my_location))
+                  if (deviceLocationEnabled)
+                    IconButton(
+                        tooltip: '현재 위치',
+                        onPressed: _locating ? null : _locate,
+                        icon: const Icon(Icons.my_location))
                 ]),
             body: AppContent(
                 child: Column(children: [

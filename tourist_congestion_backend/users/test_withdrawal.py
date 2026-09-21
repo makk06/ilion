@@ -1,9 +1,11 @@
 import uuid
 from datetime import date, timedelta
 from io import StringIO
+from tempfile import mkdtemp
 from unittest.mock import patch
 
 from django.core.management import call_command
+from django.core.files.base import ContentFile
 
 from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
@@ -139,6 +141,10 @@ class EmailHashTests(TestCase):
 
 class PurgeTests(TestCase):
     def setUp(self):
+        # Keep the isolated test directory; never touch the application's media.
+        media = override_settings(MEDIA_ROOT=mkdtemp(prefix='ilion-withdrawal-photos-'))
+        media.enable()
+        self.addCleanup(media.disable)
         self.place = create_place()
         self.leaver = User.objects.create_user(
             email='leaver@example.com', password='pw12345678', nickname='떠나는사람')
@@ -165,6 +171,91 @@ class PurgeTests(TestCase):
         self.assertIsNone(review.user_id)
         self.assertIsNotNone(review.actor_id)
         self.assertEqual(review.text, '좋았습니다')
+
+    def _photo_review(self, user):
+        review = Review.objects.create(user=user, place=self.place, text='후기', rating=4)
+        review.photo.save('withdrawal-photo.png', ContentFile(b'test photo bytes'))
+        return review
+
+    def test_purge_deletes_photo_files_and_clears_urls_but_keeps_text(self):
+        reviews = [self._photo_review(self.leaver) for _ in range(2)]
+        retained = self._photo_review(self.stayer)
+        names = [review.photo.name for review in reviews]
+        storage = reviews[0].photo.storage
+        self._request_withdrawal(self.leaver)
+
+        self.assertEqual(purge_withdrawn_users(), 1)
+        for review, name in zip(reviews, names):
+            review.refresh_from_db()
+            self.assertFalse(storage.exists(name))
+            self.assertFalse(review.photo)
+            self.assertEqual(review.text, '후기')
+            self.assertEqual(review.rating, 4)
+            self.assertIsNone(review.user_id)
+            self.assertIsNotNone(review.actor_id)
+        retained.refresh_from_db()
+        self.assertTrue(storage.exists(retained.photo.name))
+        self.assertEqual(retained.user_id, self.stayer.id)
+        response = APIClient().get('/api/reviews')
+        for item in response.data['data']['items']:
+            if item['id'] in [review.id for review in reviews]:
+                self.assertIsNone(item['photo_url'])
+        self.assertEqual(purge_withdrawn_users(), 0)
+
+    def test_photo_is_preserved_during_grace_period_and_after_cancellation(self):
+        review = self._photo_review(self.leaver)
+        client = APIClient()
+        client.force_authenticate(self.leaver)
+        self.assertEqual(client.post(reverse('withdraw'), {'password': 'pw12345678'}).status_code, 200)
+        self.assertEqual(purge_withdrawn_users(), 0)
+        self.assertTrue(review.photo.storage.exists(review.photo.name))
+        client.force_authenticate(user=None)
+        response = client.post(reverse('withdraw-cancel'), {
+            'email': self.leaver.email, 'password': 'pw12345678',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(purge_withdrawn_users(now=timezone.now() + timedelta(days=8)), 0)
+        review.refresh_from_db()
+        self.assertTrue(review.photo.storage.exists(review.photo.name))
+        self.assertEqual(review.user_id, self.leaver.id)
+
+    def test_missing_photo_file_does_not_block_purge(self):
+        review = self._photo_review(self.leaver)
+        review.photo.storage.delete(review.photo.name)
+        self._request_withdrawal(self.leaver)
+        self.assertEqual(purge_withdrawn_users(), 1)
+        review.refresh_from_db()
+        self.assertFalse(review.photo)
+
+    def test_failed_photo_deletion_keeps_reference_for_retry_and_other_users_continue(self):
+        review = self._photo_review(self.leaver)
+        name, storage = review.photo.name, review.photo.storage
+        self._request_withdrawal(self.leaver)
+        self._request_withdrawal(self.stayer)
+        with patch.object(storage, 'delete', side_effect=OSError('storage unavailable')):
+            self.assertEqual(purge_withdrawn_users(), 1)
+        review.refresh_from_db()
+        self.assertEqual(review.photo.name, name)
+        self.assertEqual(review.user_id, self.leaver.id)
+        self.assertTrue(storage.exists(name))
+        self.assertTrue(User.objects.filter(pk=self.leaver.id).exists())
+        self.assertFalse(User.objects.filter(pk=self.stayer.id).exists())
+        self.assertEqual(purge_withdrawn_users(), 1)
+        self.assertFalse(storage.exists(name))
+
+    def test_database_failure_after_file_deletion_can_be_retried(self):
+        review = self._photo_review(self.leaver)
+        name, storage = review.photo.name, review.photo.storage
+        self._request_withdrawal(self.leaver)
+        with patch.object(User, 'delete', side_effect=IntegrityError('test rollback')):
+            self.assertEqual(purge_withdrawn_users(), 0)
+        review.refresh_from_db()
+        self.assertEqual(review.photo.name, name)
+        self.assertEqual(review.user_id, self.leaver.id)
+        self.assertFalse(storage.exists(name))
+        self.assertEqual(purge_withdrawn_users(), 1)
+        review.refresh_from_db()
+        self.assertFalse(review.photo)
 
     def test_feedback_keeps_its_value_but_loses_its_memo(self):
         Feedback.objects.create(user=self.leaver, place=self.place,

@@ -3,7 +3,15 @@ import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/place.dart';
 
+// Release policy: manual region/place selection only. Keep the implementation
+// for later review; do not enable via a build/environment override.
+const deviceLocationEnabled = false;
+
 Future<Position> locateUser() async {
+  // Guard before *any* platform call, even if a future caller bypasses the UI.
+  if (!deviceLocationEnabled) {
+    throw StateError('현재 위치 기능은 제공하지 않습니다. 지역을 직접 선택해 주세요.');
+  }
   if (!await Geolocator.isLocationServiceEnabled()) {
     throw Exception('기기의 위치 서비스를 켜주세요. 지역 검색으로도 탐색할 수 있어요.');
   }
