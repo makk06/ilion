@@ -382,39 +382,98 @@ class LegalPageTests(TestCase):
 
 
 class DatabaseBackupRetentionTests(SimpleTestCase):
-    def test_prunes_only_backups_past_retention(self):
-        import os
-        import tempfile
-        import time
+    def setUp(self):
         from pathlib import Path
+        from tempfile import TemporaryDirectory
 
-        from config.backups import BACKUP_DIRECTORY_NAME, prune_database_backups
-        from config.legal import DATABASE_BACKUP_RETENTION_DAYS
+        from config.backups import BACKUP_DIRECTORY_NAME
 
-        with tempfile.TemporaryDirectory() as directory:
-            backups = Path(directory) / BACKUP_DIRECTORY_NAME
-            backups.mkdir()
-            now = time.time()
-            old = backups / 'db-before-a-1.sqlite3'
-            stale_partial = backups / 'db-before-a-2.sqlite3.partial'
-            recent = backups / 'db-before-b-3.sqlite3'
-            unrelated = backups / 'keep-me.txt'
-            for path in (old, stale_partial, recent, unrelated):
-                path.write_bytes(b'x')
-            expired = now - (DATABASE_BACKUP_RETENTION_DAYS + 1) * 86400
-            for path in (old, stale_partial, unrelated):
-                os.utime(path, (expired, expired))
+        temporary = TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.storage = Path(temporary.name)
+        self.backups = self.storage / BACKUP_DIRECTORY_NAME
+        self.backups.mkdir()
+        self.now = timezone.now()
 
-            removed = prune_database_backups(directory, now=now)
+    def backup(self, days, *, partial=False):
+        timestamp = (self.now - timedelta(days=days)).strftime('%Y%m%dT%H%M%S.%fZ')
+        path = self.backups / f'db-before-users-0008-{timestamp}.sqlite3'
+        if partial:
+            path = path.with_suffix('.sqlite3.partial')
+        path.write_bytes(b'backup')
+        return path
 
-            self.assertEqual({path.name for path in removed}, {old.name, stale_partial.name})
+    def test_preview_uses_creation_time_and_never_deletes(self):
+        from config.backups import expired_database_backups
+
+        old = self.backup(31)
+        boundary = self.backup(30)
+        partial = self.backup(32, partial=True)
+        recent = self.backup(29)
+        unrelated = self.backups / 'db-before-unrecognized.sqlite3'
+        unrelated.write_bytes(b'keep')
+
+        expired = expired_database_backups(self.storage, now=self.now.timestamp())
+
+        self.assertEqual(set(expired), {old, boundary, partial})
+        # All files have just been written: copying/touching must not reset their age.
+        for path in (old, boundary, partial, recent, unrelated):
+            self.assertTrue(path.exists())
+
+    def test_default_command_only_previews_and_explicit_selection_deletes_one(self):
+        from io import StringIO
+        from django.core.management import call_command
+
+        old, other = self.backup(31), self.backup(32)
+        output = StringIO()
+        with override_settings(STORAGE_DIR=self.storage):
+            call_command('cleanup_migration_backups', stdout=output)
+            self.assertTrue(old.exists())
+            self.assertTrue(other.exists())
+            self.assertIn('PREVIEW ONLY', output.getvalue())
+            call_command('cleanup_migration_backups', '--delete', old.name, stdout=output)
+        self.assertFalse(old.exists())
+        self.assertTrue(other.exists())
+
+    def test_invalid_selection_rejects_entire_batch_before_any_deletion(self):
+        from io import StringIO
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        old, recent = self.backup(31), self.backup(1)
+        for invalid in (recent.name, '../db.sqlite3', str(old)):
+            with self.subTest(invalid=invalid), override_settings(STORAGE_DIR=self.storage):
+                with self.assertRaises(CommandError):
+                    call_command('cleanup_migration_backups', '--delete', old.name,
+                                 '--delete', invalid, stdout=StringIO())
+            self.assertTrue(old.exists())
             self.assertTrue(recent.exists())
-            self.assertTrue(unrelated.exists())
+
+    def test_symlinks_and_directories_are_not_deletion_candidates(self):
+        from config.backups import delete_database_backup, expired_database_backups
+
+        target = self.storage / 'db.sqlite3'
+        target.write_bytes(b'live database')
+        name = 'db-before-users-0008-20000101T000000.000000Z.sqlite3'
+        link = self.backups / name
+        link.symlink_to(target)
+        (self.backups / (name + '.partial')).mkdir()
+
+        self.assertEqual(expired_database_backups(self.storage), [])
+        with self.assertRaises(ValueError):
+            delete_database_backup(self.storage, name)
+        self.assertEqual(target.read_bytes(), b'live database')
+
+    def test_symlinked_backup_directory_is_rejected(self):
+        from config.backups import expired_database_backups
+
+        self.backups.rmdir()
+        self.backups.symlink_to(self.storage, target_is_directory=True)
+        with self.assertRaises(ValueError):
+            expired_database_backups(self.storage)
 
     def test_missing_backup_directory_is_not_an_error(self):
-        import tempfile
+        from config.backups import expired_database_backups
 
-        from config.backups import prune_database_backups
-
-        with tempfile.TemporaryDirectory() as directory:
-            self.assertEqual(prune_database_backups(directory), [])
+        self.backups.rmdir()
+        self.assertEqual(expired_database_backups(self.storage), [])
