@@ -26,6 +26,9 @@ def create_place(**overrides):
     return Place.objects.create(**fields)
 
 
+CONSENT = {'age_over_14': True, 'agree_terms': True}
+
+
 class SignupTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -35,6 +38,7 @@ class SignupTests(TestCase):
             'email': 'test@example.com',
             'password': 'a-strong-password-123',
             'nickname': '테스트닉네임',
+            **CONSENT,
         })
 
         self.assertEqual(response.status_code, 201)
@@ -55,6 +59,7 @@ class SignupTests(TestCase):
             'email': 'b@example.com',
             'password': 'pw12345678',
             'nickname': '중복닉네임',
+            **CONSENT,
         })
 
         self.assertEqual(response.status_code, 400)
@@ -73,6 +78,7 @@ class SignupTests(TestCase):
             'email': 'taken@example.com',
             'password': 'pw12345678',
             'nickname': '나중가입',
+            **CONSENT,
         })
 
         self.assertEqual(response.status_code, 400)
@@ -80,6 +86,46 @@ class SignupTests(TestCase):
         self.assertEqual(message, ['이미 가입된 이메일이에요. 로그인해 주세요.'])
         # Django's default phrasing must not reach the signup form.
         self.assertNotIn('user', message[0])
+
+    def test_signup_records_age_and_terms_consent(self):
+        from config import legal
+
+        response = self.client.post(reverse('auth-signup'), {
+            'email': 'consent@example.com',
+            'password': 'a-strong-password-123',
+            'nickname': '동의한사람',
+            **CONSENT,
+        }, format='json')
+
+        self.assertEqual(response.status_code, 201)
+        user = User.objects.get(email='consent@example.com')
+        self.assertIsNotNone(user.age_confirmed_at)
+        self.assertIsNotNone(user.terms_agreed_at)
+        self.assertEqual(user.terms_version, legal.TERMS_VERSION)
+
+    def test_signup_requires_age_and_terms_consent(self):
+        cases = [
+            ({}, {'age_over_14': '만 14세 이상인지 확인해 주세요.',
+                  'agree_terms': '이용약관에 동의해 주세요.'}),
+            ({'age_over_14': False, 'agree_terms': True},
+             {'age_over_14': '만 14세 이상만 가입할 수 있어요.'}),
+            ({'age_over_14': True, 'agree_terms': False},
+             {'agree_terms': '이용약관에 동의해야 가입할 수 있어요.'}),
+        ]
+        for consent, expected in cases:
+            with self.subTest(consent=consent):
+                response = self.client.post(reverse('auth-signup'), {
+                    'email': 'nope@example.com',
+                    'password': 'a-strong-password-123',
+                    'nickname': '거절될사람',
+                    **consent,
+                }, format='json')
+
+                self.assertEqual(response.status_code, 400)
+                message = response.json()['message']
+                for field, text in expected.items():
+                    self.assertEqual(message[field], [text])
+                self.assertFalse(User.objects.filter(email='nope@example.com').exists())
 
 
 class PasswordChangeTests(TestCase):

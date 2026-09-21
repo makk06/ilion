@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
 import '../services/app_session.dart';
+import '../services/legal_links.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_chrome.dart';
 import 'profile_places_screens.dart';
@@ -31,6 +32,8 @@ class _AuthScreenState extends State<AuthScreen> {
   final _password = TextEditingController();
   final _nickname = TextEditingController();
   bool _signup = false;
+  bool _ageConfirmed = false;
+  bool _termsAgreed = false;
   bool _busy = false;
   bool _nicknameBusy = false;
   bool _obscure = true;
@@ -96,14 +99,19 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Future<void> _submit() async {
     if (_busy || !_form.currentState!.validate()) return;
+    if (_signup && !(_ageConfirmed && _termsAgreed)) {
+      setState(() => _error = '만 14세 이상 확인과 이용약관 동의가 필요해요.');
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
       if (_signup) {
-        await AppSession.instance
-            .signup(_email.text, _password.text, _nickname.text);
+        await AppSession.instance.signup(
+            _email.text, _password.text, _nickname.text,
+            ageOver14: _ageConfirmed, agreeTerms: _termsAgreed);
       } else {
         await AppSession.instance.login(_email.text, _password.text);
       }
@@ -284,6 +292,33 @@ class _AuthScreenState extends State<AuthScreen> {
                                 onPressed: _busy ? null : _forgotPassword,
                                 child: const Text('비밀번호를 잊으셨나요?',
                                     style: TextStyle(fontSize: 12)))),
+                      if (_signup) ...[
+                        const SizedBox(height: 12),
+                        _ConsentTile(
+                            key: const ValueKey('auth-consent-age'),
+                            label: '[필수] 만 14세 이상입니다',
+                            value: _ageConfirmed,
+                            onChanged: _busy
+                                ? null
+                                : (value) =>
+                                    setState(() => _ageConfirmed = value)),
+                        _ConsentTile(
+                            key: const ValueKey('auth-consent-terms'),
+                            label: '[필수] 이용약관에 동의합니다',
+                            value: _termsAgreed,
+                            onChanged: _busy
+                                ? null
+                                : (value) =>
+                                    setState(() => _termsAgreed = value),
+                            onView: () => openLegalPage(context, '/terms')),
+                        Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton(
+                                onPressed: () =>
+                                    openLegalPage(context, '/privacy'),
+                                child: const Text('개인정보 처리방침 보기',
+                                    style: TextStyle(fontSize: 12)))),
+                      ],
                       if (_error != null)
                         Padding(
                             padding: const EdgeInsets.only(top: 16),
@@ -303,5 +338,36 @@ class _AuthScreenState extends State<AuthScreen> {
                           onPressed: _busy ? null : _toggleMode,
                           child: Text(_signup ? '이미 계정이 있어요 · 로그인' : '계정 만들기')),
                     ])))),
+      );
+}
+
+class _ConsentTile extends StatelessWidget {
+  const _ConsentTile(
+      {super.key,
+      required this.label,
+      required this.value,
+      required this.onChanged,
+      this.onView});
+
+  final String label;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  final VoidCallback? onView;
+
+  @override
+  Widget build(BuildContext context) => CheckboxListTile(
+        value: value,
+        onChanged: onChanged == null
+            ? null
+            : (checked) => onChanged!(checked ?? false),
+        controlAffinity: ListTileControlAffinity.leading,
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        title: Text(label, style: const TextStyle(fontSize: 13)),
+        secondary: onView == null
+            ? null
+            : TextButton(
+                onPressed: onView,
+                child: const Text('보기', style: TextStyle(fontSize: 12))),
       );
 }

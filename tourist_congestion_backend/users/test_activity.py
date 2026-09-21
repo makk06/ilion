@@ -1,4 +1,5 @@
 import io
+import os
 import tempfile
 from datetime import timedelta
 from PIL import Image
@@ -54,6 +55,48 @@ class ActivityAPITests(APITestCase):
             self.assertFalse(response.data['data']['review']['visit_verified'])
         response = self.client.post('/api/reviews', {'place_id': self.place.id, 'text': 'Bad', 'photo': SimpleUploadedFile('bad.png', b'not an image', content_type='image/png')}, format='multipart')
         self.assertEqual(response.status_code, 400)
+
+    def _photo(self, name):
+        stream = io.BytesIO()
+        Image.new('RGB', (2, 2)).save(stream, format='PNG')
+        return SimpleUploadedFile(name, stream.getvalue(), content_type='image/png')
+
+    def test_review_photo_files_are_deleted_on_replace_and_delete(self):
+        with tempfile.TemporaryDirectory() as directory, override_settings(MEDIA_ROOT=directory):
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post('/api/reviews', {
+                    'place_id': self.place.id, 'text': 'Photo', 'photo': self._photo('first.png'),
+                }, format='multipart')
+            review = Review.objects.get(pk=response.data['data']['review']['id'])
+            first = review.photo.path
+
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.patch(f'/api/reviews/{review.id}', {
+                    'photo': self._photo('second.png'),
+                }, format='multipart')
+            self.assertEqual(response.status_code, 200)
+            review.refresh_from_db()
+            second = review.photo.path
+            self.assertNotEqual(first, second)
+            self.assertFalse(os.path.exists(first))
+            self.assertTrue(os.path.exists(second))
+
+            with self.captureOnCommitCallbacks(execute=True):
+                self.assertEqual(self.client.delete(f'/api/reviews/{review.id}').status_code, 200)
+            self.assertFalse(os.path.exists(second))
+
+    def test_review_text_edit_keeps_photo_file(self):
+        with tempfile.TemporaryDirectory() as directory, override_settings(MEDIA_ROOT=directory):
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post('/api/reviews', {
+                    'place_id': self.place.id, 'text': 'Photo', 'photo': self._photo('keep.png'),
+                }, format='multipart')
+            review = Review.objects.get(pk=response.data['data']['review']['id'])
+
+            with self.captureOnCommitCallbacks(execute=True):
+                self.client.patch(f'/api/reviews/{review.id}', {'text': 'Edited'}, format='json')
+
+            self.assertTrue(os.path.exists(review.photo.path))
 
     def test_companion_capacity_membership_and_dates(self):
         response = self.companion()

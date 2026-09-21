@@ -544,7 +544,8 @@ class RejoinBlockTests(TestCase):
     def _signup(self, email):
         return self.client.post(reverse('auth-signup'), {
             'email': email, 'password': 'pw12345678', 'nickname': '재가입자',
-        })
+            'age_over_14': True, 'agree_terms': True,
+        }, format='json')
 
     def test_recently_withdrawn_email_cannot_sign_up(self):
         self._block('leaver@example.com')

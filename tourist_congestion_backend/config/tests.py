@@ -347,3 +347,74 @@ class BackendTestDashboardTests(TestCase):
         }, secure=True, HTTP_ORIGIN='https://testserver')
         self.assertEqual(response.status_code, 200)
         self.assertIsNone(response.context['form_errors'])
+
+
+class LegalPageTests(TestCase):
+    def test_terms_page_is_public_and_names_the_operator(self):
+        from config import legal
+
+        response = self.client.get('/terms')
+
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertIn(legal.OPERATOR_NAME, body)
+        self.assertIn('만 14세 이상만 가입할 수 있습니다', body)
+
+    def test_privacy_page_stays_unpublished_until_log_retention_is_known(self):
+        with patch('config.legal.ACCESS_LOG_RETENTION', ''):
+            response = self.client.get('/privacy')
+
+        self.assertEqual(response.status_code, 503)
+
+    def test_privacy_page_shows_filled_operator_details(self):
+        from config import legal
+
+        with patch('config.legal.ACCESS_LOG_RETENTION', '3개월'):
+            response = self.client.get('/privacy')
+
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        for value in (legal.OPERATOR_NAME, legal.PRIVACY_OFFICER_NAME, legal.CONTACT_EMAIL, '3개월'):
+            self.assertIn(value, body)
+        # 채우지 않은 템플릿 변수나 초안 표식이 공개본에 남으면 안 된다.
+        self.assertNotIn('{{', body)
+        self.assertNotIn('내부 검토', body)
+
+
+class DatabaseBackupRetentionTests(SimpleTestCase):
+    def test_prunes_only_backups_past_retention(self):
+        import os
+        import tempfile
+        import time
+        from pathlib import Path
+
+        from config.backups import BACKUP_DIRECTORY_NAME, prune_database_backups
+        from config.legal import DATABASE_BACKUP_RETENTION_DAYS
+
+        with tempfile.TemporaryDirectory() as directory:
+            backups = Path(directory) / BACKUP_DIRECTORY_NAME
+            backups.mkdir()
+            now = time.time()
+            old = backups / 'db-before-a-1.sqlite3'
+            stale_partial = backups / 'db-before-a-2.sqlite3.partial'
+            recent = backups / 'db-before-b-3.sqlite3'
+            unrelated = backups / 'keep-me.txt'
+            for path in (old, stale_partial, recent, unrelated):
+                path.write_bytes(b'x')
+            expired = now - (DATABASE_BACKUP_RETENTION_DAYS + 1) * 86400
+            for path in (old, stale_partial, unrelated):
+                os.utime(path, (expired, expired))
+
+            removed = prune_database_backups(directory, now=now)
+
+            self.assertEqual({path.name for path in removed}, {old.name, stale_partial.name})
+            self.assertTrue(recent.exists())
+            self.assertTrue(unrelated.exists())
+
+    def test_missing_backup_directory_is_not_an_error(self):
+        import tempfile
+
+        from config.backups import prune_database_backups
+
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(prune_database_backups(directory), [])

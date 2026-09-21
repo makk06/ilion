@@ -65,6 +65,13 @@ class Command(BaseCommand):
                                 self.stdout.write(f'purged_withdrawn_users={purged}')
                         except Exception as error:
                             self.stderr.write(f'purge_withdrawn_users failed: {error}')
+                        # 재배포 없이 오래 돌아도 처리방침의 백업 보관 기간을 지킨다.
+                        try:
+                            from config.backups import prune_database_backups
+                            for removed in prune_database_backups(settings.STORAGE_DIR):
+                                self.stdout.write(f'expired_backup_removed={removed.name}')
+                        except OSError as error:
+                            self.stderr.write(f'prune_database_backups failed: {error}')
                         last_schedule = minute
                 if options['dev']:
                     self._schedule_dev()

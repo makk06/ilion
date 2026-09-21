@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../services/app_session.dart';
+import '../services/legal_links.dart';
 import '../theme/app_theme.dart';
 import '../widgets/activity_data.dart';
 import '../widgets/app_chrome.dart';
@@ -194,6 +195,9 @@ class ProfileScreen extends StatelessWidget {
                   auth: true),
               _menu(context, Icons.headset_mic_outlined, '도움말 및 문의',
                   const HelpScreen()),
+              _link(context, Icons.description_outlined, '서비스 이용약관', '/terms'),
+              _link(
+                  context, Icons.privacy_tip_outlined, '개인정보 처리방침', '/privacy'),
               if (session.isAuthenticated)
                 _menu(context, Icons.manage_accounts_outlined, '계정 설정',
                     const AccountSettingsScreen(),
@@ -248,6 +252,17 @@ class ProfileScreen extends StatelessWidget {
         trailing: const Icon(Icons.chevron_right_rounded,
             size: 19, color: AppColors.textMuted),
         onTap: () => _open(context, screen, auth: auth),
+      );
+
+  Widget _link(
+          BuildContext context, IconData icon, String title, String path) =>
+      ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+        leading: Icon(icon, size: 21, color: AppColors.textMuted),
+        title: Text(title, style: const TextStyle(fontSize: 14)),
+        trailing: const Icon(Icons.open_in_new_rounded,
+            size: 17, color: AppColors.textMuted),
+        onTap: () => openLegalPage(context, path),
       );
 }
 
