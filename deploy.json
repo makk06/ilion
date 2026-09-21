@@ -13,7 +13,7 @@
   "environment": {
     "DJANGO_DEBUG": "false",
     "DJANGO_ALLOWED_HOSTS": "127.0.0.1,localhost",
-    "DJANGO_MIGRATION_TARGET": "users.0007_favorite_actor_feedback_actor_recentplace_actor_and_more",
+    "DJANGO_MIGRATION_TARGET": "users.0008_user_signup_consent",
     "GOOGLE_CLIENT_ID": "",
     "DATA_WORKER_ENABLED": "true",
     "TOUR_API_DAILY_LIMIT": "1000",

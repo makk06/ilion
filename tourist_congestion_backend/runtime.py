@@ -9,6 +9,8 @@ import subprocess
 import sys
 import time
 
+from config.backups import BACKUP_DIRECTORY_NAME
+
 
 APPROVED_MIGRATION_PLANS = {
     'config.0001_merge_main_recommendation': (
@@ -28,6 +30,13 @@ APPROVED_MIGRATION_PLANS = {
         ('users', '0006_anonymousactor_withdrawalreason_withdrawnemailhash_and_more'),
         ('users', '0007_favorite_actor_feedback_actor_recentplace_actor_and_more'),
     ),
+    # 가입 시 만 14세 확인·약관 동의 기록. 운영 DB가 탈퇴 계획 적용 전(config.0001)이든,
+    # 0006까지만 적용됐든, 0007까지 끝났든 같은 대상으로 0008까지 가게 한다.
+    'users.0008_user_signup_consent': (
+        ('users', '0006_anonymousactor_withdrawalreason_withdrawnemailhash_and_more'),
+        ('users', '0007_favorite_actor_feedback_actor_recentplace_actor_and_more'),
+        ('users', '0008_user_signup_consent'),
+    ),
 }
 
 # A deploy may be stopped after Django commits one migration but before the
@@ -38,6 +47,15 @@ APPROVED_PARTIAL_MIGRATION_PLANS = {
     'users.0007_favorite_actor_feedback_actor_recentplace_actor_and_more': (
         (
             ('users', '0007_favorite_actor_feedback_actor_recentplace_actor_and_more'),
+        ),
+    ),
+    'users.0008_user_signup_consent': (
+        (
+            ('users', '0007_favorite_actor_feedback_actor_recentplace_actor_and_more'),
+            ('users', '0008_user_signup_consent'),
+        ),
+        (
+            ('users', '0008_user_signup_consent'),
         ),
     ),
 }
@@ -69,7 +87,7 @@ def _quick_check(database):
 
 
 def _backup_database(storage, database, target):
-    backup_directory = storage / 'migration-backups'
+    backup_directory = storage / BACKUP_DIRECTORY_NAME
     backup_directory.mkdir(exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
     backup = backup_directory / f'db-before-{target.replace(".", "-")}-{timestamp}.sqlite3'
@@ -151,7 +169,9 @@ def main():
             '--bind', os.environ.get('HOST', '0.0.0.0') + ':' + os.environ.get('PORT', '8000'),
             '--workers', '1', '--threads', '4', '--timeout', '60',
             '--graceful-timeout', '20', '--worker-tmp-dir', '/tmp',
-            '--access-logfile', '-', '--error-logfile', '-',
+            # 접속 기록은 앞단 nginx가 남기고 처리방침의 기간으로 순환한다.
+            # 여기서도 남기면 도커 로그에 기간 없이 쌓이므로 오류 로그만 둔다.
+            '--error-logfile', '-',
         ]))
         while not stopping:
             if any(child.poll() is not None for child in children):

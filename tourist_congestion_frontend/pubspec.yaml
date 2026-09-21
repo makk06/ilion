@@ -1,7 +1,7 @@
 name: tourist_congestion_frontend
 description: 실시간 혼잡도 기반 장소 추천 앱의 Flutter 프런트엔드 기본 틀
 publish_to: "none"
-version: 0.1.0+1
+version: 1.0.0+1
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -31,4 +31,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/brand/logo.png
     - assets/maps/simple.json

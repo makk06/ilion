@@ -6,7 +6,7 @@
     -->
     <application
         android:allowBackup="false"
-        android:label="tourist_congestion_frontend"
+        android:label="이리ON"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

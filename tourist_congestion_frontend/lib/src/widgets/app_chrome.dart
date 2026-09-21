@@ -13,24 +13,6 @@ class AppContent extends StatelessWidget {
       );
 }
 
-class BrandMark extends StatelessWidget {
-  const BrandMark(
-      {super.key, this.size = 48, this.backgroundColor = AppColors.p6});
-  final double size;
-  final Color backgroundColor;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-            color: backgroundColor,
-            borderRadius: BorderRadius.circular(size * .25)),
-        child: Icon(Icons.location_on_rounded,
-            color: Colors.white, size: size * .62),
-      );
-}
-
 class GreenAppBar extends StatelessWidget implements PreferredSizeWidget {
   const GreenAppBar(
       {super.key, required this.title, this.leading, this.actions = const []});

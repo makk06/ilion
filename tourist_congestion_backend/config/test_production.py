@@ -38,7 +38,7 @@ class ProductionHealthTests(TestCase):
 
 class ProductionMigrationTests(TestCase):
     backend_directory = Path(__file__).resolve().parents[1]
-    migration_name = '0007_favorite_actor_feedback_actor_recentplace_actor_and_more'
+    migration_name = '0008_user_signup_consent'
     migration_target = f'users.{migration_name}'
 
     def _environment(self, storage, **updates):
@@ -90,6 +90,16 @@ class ProductionMigrationTests(TestCase):
         self._run(
             ['manage.py', 'migrate', 'users',
              '0006_anonymousactor_withdrawalreason_withdrawnemailhash_and_more',
+             '--noinput'],
+            environment,
+        )
+        return environment
+
+    def _database_at_completed_withdrawal_migration(self, storage):
+        environment = self._database_at_current_production_migration(storage)
+        self._run(
+            ['manage.py', 'migrate', 'users',
+             '0007_favorite_actor_feedback_actor_recentplace_actor_and_more',
              '--noinput'],
             environment,
         )
@@ -177,3 +187,20 @@ class ProductionMigrationTests(TestCase):
                     'SELECT 1 FROM django_migrations WHERE app = ? AND name = ?',
                     ('users', self.migration_name),
                 ).fetchone(), (1,))
+
+    def test_approved_plan_applies_consent_after_completed_withdrawal_migration(self):
+        with TemporaryDirectory() as directory:
+            storage = Path(directory)
+            environment = self._database_at_completed_withdrawal_migration(storage)
+            environment['DJANGO_MIGRATION_TARGET'] = self.migration_target
+
+            self._initialize_existing_database(environment)
+
+            with sqlite3.connect(storage / 'db.sqlite3') as database:
+                self.assertEqual(database.execute('PRAGMA quick_check').fetchone(), ('ok',))
+                self.assertEqual(database.execute(
+                    'SELECT 1 FROM django_migrations WHERE app = ? AND name = ?',
+                    ('users', self.migration_name),
+                ).fetchone(), (1,))
+                columns = {row[1] for row in database.execute('PRAGMA table_info(users_user)')}
+            self.assertTrue({'age_confirmed_at', 'terms_agreed_at', 'terms_version'} <= columns)

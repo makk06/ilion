@@ -1,3 +1,5 @@
+import logging
+
 from django.db import transaction
 from django.db.models import Avg, F, Sum
 from django.shortcuts import get_object_or_404
@@ -12,6 +14,8 @@ from .activity_serializers import (ProfileSerializer, ReviewSerializer, Companio
 from .serializers import FavoriteCreateSerializer
 from .views import success_response, error_response
 from places.models import Place
+
+logger = logging.getLogger(__name__)
 
 
 # 탈퇴자가 남긴 글의 작성자 표기. 원 작성자는 복원할 수 없다.
@@ -85,6 +89,21 @@ class ReviewsView(APIView):
         return success_response({'review': review_data(item, request), 'points_awarded': 50 if awarded else 0}, status_code=201)
 
 
+def _delete_photo_after_commit(storage, name):
+    """Remove a review photo the DB no longer references, once that change is committed.
+
+    Deleting first would leave a review pointing at a missing file if the transaction
+    rolled back. A failed delete leaves an unreferenced file; it is logged, not raised.
+    """
+    def delete():
+        try:
+            storage.delete(name)
+        except OSError:
+            logger.exception('review photo delete failed: %s', name)
+
+    transaction.on_commit(delete)
+
+
 class ReviewDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -95,7 +114,10 @@ class ReviewDetailView(APIView):
         serializer.is_valid(raise_exception=True)
         if 'place' in serializer.validated_data and serializer.validated_data['place'] != item.place:
             return error_response('등록된 후기의 장소는 변경할 수 없습니다.')
+        previous_photo = item.photo.name
         serializer.save()
+        if previous_photo and item.photo.name != previous_photo:
+            _delete_photo_after_commit(item.photo.storage, previous_photo)
         update_rating(item.place)
         return success_response(review_data(item, request))
 
@@ -103,7 +125,10 @@ class ReviewDetailView(APIView):
     def delete(self, request, pk):
         item = get_object_or_404(Review, pk=pk, user=request.user)
         place = item.place
+        photo_storage, photo_name = item.photo.storage, item.photo.name
         item.delete()
+        if photo_name:
+            _delete_photo_after_commit(photo_storage, photo_name)
         update_rating(place)
         return success_response()
 

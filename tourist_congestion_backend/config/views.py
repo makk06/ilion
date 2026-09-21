@@ -3,9 +3,12 @@ import time
 
 from django.conf import settings
 from django.db import DatabaseError, connection
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import render
 from django.views.decorators.debug import sensitive_variables
 from django.views.decorators.http import require_GET
+
+from config import legal
 
 
 @require_GET
@@ -42,3 +45,18 @@ def healthz(request):
         except (DatabaseError, OSError):
             return JsonResponse({'status': 'unavailable'}, status=503)
     return JsonResponse({'status': 'ok'})
+
+
+@require_GET
+def privacy_policy(request):
+    """Public policy page linked from the store listing and the app."""
+    if not legal.ACCESS_LOG_RETENTION:
+        # 보관 기간을 모르는 채로 게시하면 처리방침 자체가 사실과 달라진다.
+        return HttpResponse('개인정보 처리방침을 준비하고 있습니다.', status=503,
+                            content_type='text/plain; charset=utf-8')
+    return render(request, 'config/privacy_policy.html', legal.context())
+
+
+@require_GET
+def terms_of_service(request):
+    return render(request, 'config/terms_of_service.html', legal.context())

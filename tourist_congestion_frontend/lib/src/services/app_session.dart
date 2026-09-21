@@ -61,11 +61,14 @@ class AppSession extends ChangeNotifier {
         '/auth/login', {'email': email.trim(), 'password': password});
   }
 
-  Future<void> signup(String email, String password, String nickname) async {
+  Future<void> signup(String email, String password, String nickname,
+      {required bool ageOver14, required bool agreeTerms}) async {
     await _authenticate('/auth/signup', {
       'email': email.trim(),
       'password': password,
-      'nickname': nickname.trim()
+      'nickname': nickname.trim(),
+      'age_over_14': ageOver14,
+      'agree_terms': agreeTerms,
     });
   }
 
@@ -77,7 +80,7 @@ class AppSession extends ChangeNotifier {
   Future<void> cancelWithdrawal(String email, String password) => _authenticate(
       '/me/withdraw/cancel', {'email': email.trim(), 'password': password});
 
-  Future<void> _authenticate(String path, Map<String, String> body) async {
+  Future<void> _authenticate(String path, Map<String, Object> body) async {
     final data =
         Map<String, dynamic>.from(await _api.post(path, body: body) as Map);
     _generation++;

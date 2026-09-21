@@ -1,4 +1,4 @@
-package com.example.tourist_congestion_frontend
+package kr.hurdoo.app.ilion
 
 import io.flutter.embedding.android.FlutterActivity
 

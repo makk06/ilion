@@ -5,6 +5,7 @@ from rest_framework.validators import UniqueValidator
 
 from django.utils import timezone
 
+from config import legal
 from places.models import Place
 
 from .models import WithdrawnEmailHash
@@ -46,10 +47,29 @@ class SignupSerializer(serializers.ModelSerializer):
         },
     )
     password = serializers.CharField(write_only=True, validators=[validate_password])
+    # 만 14세 미만은 법정대리인 동의 절차가 없으므로 받지 않는다. 생년월일 대신 본인 확인만 받는다.
+    age_over_14 = serializers.BooleanField(
+        write_only=True,
+        error_messages={'required': '만 14세 이상인지 확인해 주세요.'},
+    )
+    agree_terms = serializers.BooleanField(
+        write_only=True,
+        error_messages={'required': '이용약관에 동의해 주세요.'},
+    )
 
     class Meta:
         model = User
-        fields = ['email', 'password', 'nickname']
+        fields = ['email', 'password', 'nickname', 'age_over_14', 'agree_terms']
+
+    def validate_age_over_14(self, value):
+        if value is not True:
+            raise serializers.ValidationError('만 14세 이상만 가입할 수 있어요.')
+        return value
+
+    def validate_agree_terms(self, value):
+        if value is not True:
+            raise serializers.ValidationError('이용약관에 동의해야 가입할 수 있어요.')
+        return value
 
     def validate_email(self, value):
         blocked = WithdrawnEmailHash.objects.filter(
@@ -63,7 +83,16 @@ class SignupSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop('password')
-        user = User(provider=User.Provider.EMAIL, **validated_data)
+        validated_data.pop('age_over_14')
+        validated_data.pop('agree_terms')
+        now = timezone.now()
+        user = User(
+            provider=User.Provider.EMAIL,
+            age_confirmed_at=now,
+            terms_agreed_at=now,
+            terms_version=legal.TERMS_VERSION,
+            **validated_data,
+        )
         user.set_password(password)
         user.save()
         return user

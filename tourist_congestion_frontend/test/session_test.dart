@@ -62,14 +62,21 @@ void main() {
   });
 
   test('signup success survives unrelated profile read failure', () async {
-    final api = ApiClient(
-        client: MockClient((r) async => r.url.path == '/api/auth/signup'
-            ? ok({'access_token': 'access', 'refresh_token': 'refresh'})
-            : http.Response(
-                '{"success":false,"message":"temporarily unavailable"}', 503)));
+    Map<String, dynamic>? signupBody;
+    final api = ApiClient(client: MockClient((r) async {
+      if (r.url.path == '/api/auth/signup') {
+        signupBody = jsonDecode(r.body) as Map<String, dynamic>;
+        return ok({'access_token': 'access', 'refresh_token': 'refresh'});
+      }
+      return http.Response(
+          '{"success":false,"message":"temporarily unavailable"}', 503);
+    }));
     final session = AppSession(api: api);
-    await session.signup('test@example.com', 'test password', 'tester');
+    await session.signup('test@example.com', 'test password', 'tester',
+        ageOver14: true, agreeTerms: true);
     expect(session.isAuthenticated, true);
+    expect(signupBody?['age_over_14'], true);
+    expect(signupBody?['agree_terms'], true);
   });
   test('guest favorites recent and plans survive restart without API calls',
       () async {
