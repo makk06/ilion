@@ -11,7 +11,7 @@ PRIVACY_OFFICER_TITLE = '팀장'
 CONTACT_EMAIL = 'ehrud8657@gmail.com'
 SUPPORT_PATH = '앱 > 마이 > 도움말 및 문의'
 
-TERMS_VERSION = '2026-09-21.1'
+TERMS_VERSION = '2026-09-21.2'
 EFFECTIVE_DATE = '2026년 9월 21일'
 
 # 서버(nginx)의 접속 로그 보관 기간. 운영 서버 logrotate 설정(daily, rotate 14) 기준.

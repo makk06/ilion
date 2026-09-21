@@ -37,14 +37,18 @@ void main() {
   });
 
   Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+    // 동의 항목이 늘어 가입 버튼이 첫 화면 밖에 있으면 목록을 내려서 찾는다.
+    if (finder.evaluate().isEmpty) {
+      await tester.scrollUntilVisible(finder, 200,
+          scrollable: find.byType(Scrollable).first);
+    }
     await tester.ensureVisible(finder);
     await tester.pumpAndSettle();
     await tester.tap(finder);
     await tester.pumpAndSettle();
   }
 
-  testWidgets('signup is sent only after age and terms are both confirmed',
-      (tester) async {
+  Future<void> openSignup(WidgetTester tester) async {
     await tester.pumpWidget(MaterialApp(
         home: Builder(
             builder: (context) => TextButton(
@@ -53,25 +57,61 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     await tapVisible(tester, find.text('계정 만들기'));
-
     await tester.enterText(
         find.widgetWithText(TextFormField, '이메일'), 'new@example.com');
     await tester.enterText(find.byKey(const ValueKey('auth-nickname')), '새여행자');
     await tester.enterText(
         find.byKey(const ValueKey('auth-password')), 'a-strong-password-123');
+  }
+
+  testWidgets('signup is sent only after every required consent is checked',
+      (tester) async {
+    await openSignup(tester);
 
     await tapVisible(tester, find.widgetWithText(FilledButton, '회원가입'));
-    expect(find.text('만 14세 이상 확인과 이용약관 동의가 필요해요.'), findsOneWidget);
+    expect(find.text('필수 항목에 모두 동의해 주세요.'), findsOneWidget);
     expect(signupBodies, isEmpty);
 
     await tapVisible(tester, find.byKey(const ValueKey('auth-consent-age')));
-    await tapVisible(tester, find.widgetWithText(FilledButton, '회원가입'));
-    expect(signupBodies, isEmpty);
-
     await tapVisible(tester, find.byKey(const ValueKey('auth-consent-terms')));
+    await tapVisible(tester, find.widgetWithText(FilledButton, '회원가입'));
+    expect(signupBodies, isEmpty, reason: '개인정보 수집·이용 동의 없이는 가입하지 않는다');
+
+    await tapVisible(
+        tester, find.byKey(const ValueKey('auth-consent-privacy')));
     await tapVisible(tester, find.widgetWithText(FilledButton, '회원가입'));
     expect(signupBodies, hasLength(1));
     expect(signupBodies.single['age_over_14'], true);
     expect(signupBodies.single['agree_terms'], true);
+    expect(signupBodies.single['agree_privacy'], true);
+  });
+
+  testWidgets('all-agree checks every required consent at once',
+      (tester) async {
+    await openSignup(tester);
+
+    await tapVisible(tester, find.byKey(const ValueKey('auth-consent-all')));
+    await tapVisible(tester, find.widgetWithText(FilledButton, '회원가입'));
+
+    expect(signupBodies, hasLength(1));
+    expect(signupBodies.single['agree_privacy'], true);
+  });
+
+  testWidgets('privacy notice shows collected items in the app and can agree',
+      (tester) async {
+    await openSignup(tester);
+
+    final privacyTile = find.byKey(const ValueKey('auth-consent-privacy'));
+    await tapVisible(
+        tester, find.descendant(of: privacyTile, matching: find.text('보기')));
+    expect(find.text('개인정보 수집·이용 동의'), findsOneWidget);
+    expect(find.textContaining('이메일, 비밀번호, 닉네임'), findsOneWidget);
+    expect(find.textContaining('거부하면 회원가입을 할 수 없습니다'), findsOneWidget);
+
+    await tapVisible(
+        tester, find.byKey(const ValueKey('privacy-consent-agree')));
+    final tile = tester.widget<CheckboxListTile>(find.descendant(
+        of: privacyTile, matching: find.byType(CheckboxListTile)));
+    expect(tile.value, true);
   });
 }

@@ -34,6 +34,9 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _signup = false;
   bool _ageConfirmed = false;
   bool _termsAgreed = false;
+  bool _privacyAgreed = false;
+
+  bool get _allAgreed => _ageConfirmed && _termsAgreed && _privacyAgreed;
   bool _busy = false;
   bool _nicknameBusy = false;
   bool _obscure = true;
@@ -97,10 +100,47 @@ class _AuthScreenState extends State<AuthScreen> {
         context, MaterialPageRoute<void>(builder: (_) => const HelpScreen()));
   }
 
+  /// 수집 전에 항목·목적·보유기간·거부 권리를 앱 안에서 바로 보여준다.
+  /// 서버의 처리방침 페이지가 열리지 않아도 동의 내용은 확인할 수 있어야 한다.
+  Future<void> _showPrivacyConsent() async {
+    final agreed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: const Text('개인정보 수집·이용 동의'),
+              content: const SingleChildScrollView(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                    _ConsentFact(
+                        '수집 항목', '이메일, 비밀번호, 닉네임, 만 14세 이상 확인 및 동의 일시'),
+                    _ConsentFact(
+                        '이용 목적', '회원 식별과 로그인, 후기·동행·저장 등 회원 기능 제공, 문의 응대'),
+                    _ConsentFact('보유 기간',
+                        '회원 탈퇴 신청 후 7일이 지나면 파기합니다. 재가입 제한을 위해 이메일을 되돌릴 수 없게 변환한 값만 파기 후 30일간 보관합니다.'),
+                    _ConsentFact('동의 거부',
+                        '동의를 거부할 수 있으며, 거부하면 회원가입을 할 수 없습니다. 회원가입 없이도 장소 검색·혼잡도 확인·추천은 이용할 수 있습니다.'),
+                  ])),
+              actions: [
+                TextButton(
+                    onPressed: () => openLegalPage(context, '/privacy'),
+                    child: const Text('처리방침 전문')),
+                TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('닫기')),
+                FilledButton(
+                    key: const ValueKey('privacy-consent-agree'),
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text('동의')),
+              ],
+            ));
+    if (agreed == true && mounted) setState(() => _privacyAgreed = true);
+  }
+
   Future<void> _submit() async {
     if (_busy || !_form.currentState!.validate()) return;
-    if (_signup && !(_ageConfirmed && _termsAgreed)) {
-      setState(() => _error = '만 14세 이상 확인과 이용약관 동의가 필요해요.');
+    if (_signup && !_allAgreed) {
+      setState(() => _error = '필수 항목에 모두 동의해 주세요.');
       return;
     }
     setState(() {
@@ -111,7 +151,9 @@ class _AuthScreenState extends State<AuthScreen> {
       if (_signup) {
         await AppSession.instance.signup(
             _email.text, _password.text, _nickname.text,
-            ageOver14: _ageConfirmed, agreeTerms: _termsAgreed);
+            ageOver14: _ageConfirmed,
+            agreeTerms: _termsAgreed,
+            agreePrivacy: _privacyAgreed);
       } else {
         await AppSession.instance.login(_email.text, _password.text);
       }
@@ -295,6 +337,19 @@ class _AuthScreenState extends State<AuthScreen> {
                       if (_signup) ...[
                         const SizedBox(height: 12),
                         _ConsentTile(
+                            key: const ValueKey('auth-consent-all'),
+                            label: '전체 동의',
+                            emphasized: true,
+                            value: _allAgreed,
+                            onChanged: _busy
+                                ? null
+                                : (value) => setState(() {
+                                      _ageConfirmed = value;
+                                      _termsAgreed = value;
+                                      _privacyAgreed = value;
+                                    })),
+                        const Divider(height: 8),
+                        _ConsentTile(
                             key: const ValueKey('auth-consent-age'),
                             label: '[필수] 만 14세 이상입니다',
                             value: _ageConfirmed,
@@ -311,13 +366,15 @@ class _AuthScreenState extends State<AuthScreen> {
                                 : (value) =>
                                     setState(() => _termsAgreed = value),
                             onView: () => openLegalPage(context, '/terms')),
-                        Align(
-                            alignment: Alignment.centerLeft,
-                            child: TextButton(
-                                onPressed: () =>
-                                    openLegalPage(context, '/privacy'),
-                                child: const Text('개인정보 처리방침 보기',
-                                    style: TextStyle(fontSize: 12)))),
+                        _ConsentTile(
+                            key: const ValueKey('auth-consent-privacy'),
+                            label: '[필수] 개인정보 수집·이용에 동의합니다',
+                            value: _privacyAgreed,
+                            onChanged: _busy
+                                ? null
+                                : (value) =>
+                                    setState(() => _privacyAgreed = value),
+                            onView: _showPrivacyConsent),
                       ],
                       if (_error != null)
                         Padding(
@@ -347,12 +404,14 @@ class _ConsentTile extends StatelessWidget {
       required this.label,
       required this.value,
       required this.onChanged,
-      this.onView});
+      this.onView,
+      this.emphasized = false});
 
   final String label;
   final bool value;
   final ValueChanged<bool>? onChanged;
   final VoidCallback? onView;
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) => CheckboxListTile(
@@ -363,11 +422,33 @@ class _ConsentTile extends StatelessWidget {
         controlAffinity: ListTileControlAffinity.leading,
         contentPadding: EdgeInsets.zero,
         dense: true,
-        title: Text(label, style: const TextStyle(fontSize: 13)),
+        title: Text(label,
+            style: TextStyle(
+                fontSize: emphasized ? 14 : 13,
+                fontWeight: emphasized ? FontWeight.w700 : FontWeight.w400)),
         secondary: onView == null
             ? null
             : TextButton(
                 onPressed: onView,
                 child: const Text('보기', style: TextStyle(fontSize: 12))),
+      );
+}
+
+class _ConsentFact extends StatelessWidget {
+  const _ConsentFact(this.title, this.body);
+
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title,
+              style:
+                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text(body, style: const TextStyle(fontSize: 13, height: 1.5)),
+        ]),
       );
 }

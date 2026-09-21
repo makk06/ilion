@@ -73,10 +73,11 @@ void main() {
     }));
     final session = AppSession(api: api);
     await session.signup('test@example.com', 'test password', 'tester',
-        ageOver14: true, agreeTerms: true);
+        ageOver14: true, agreeTerms: true, agreePrivacy: true);
     expect(session.isAuthenticated, true);
     expect(signupBody?['age_over_14'], true);
     expect(signupBody?['agree_terms'], true);
+    expect(signupBody?['agree_privacy'], true);
   });
   test('guest favorites recent and plans survive restart without API calls',
       () async {

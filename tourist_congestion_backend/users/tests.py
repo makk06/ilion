@@ -26,7 +26,7 @@ def create_place(**overrides):
     return Place.objects.create(**fields)
 
 
-CONSENT = {'age_over_14': True, 'agree_terms': True}
+CONSENT = {'age_over_14': True, 'agree_terms': True, 'agree_privacy': True}
 
 
 class SignupTests(TestCase):
@@ -106,11 +106,14 @@ class SignupTests(TestCase):
     def test_signup_requires_age_and_terms_consent(self):
         cases = [
             ({}, {'age_over_14': '만 14세 이상인지 확인해 주세요.',
-                  'agree_terms': '이용약관에 동의해 주세요.'}),
-            ({'age_over_14': False, 'agree_terms': True},
+                  'agree_terms': '이용약관에 동의해 주세요.',
+                  'agree_privacy': '개인정보 수집·이용에 동의해 주세요.'}),
+            ({**CONSENT, 'age_over_14': False},
              {'age_over_14': '만 14세 이상만 가입할 수 있어요.'}),
-            ({'age_over_14': True, 'agree_terms': False},
+            ({**CONSENT, 'agree_terms': False},
              {'agree_terms': '이용약관에 동의해야 가입할 수 있어요.'}),
+            ({**CONSENT, 'agree_privacy': False},
+             {'agree_privacy': '개인정보 수집·이용에 동의해야 가입할 수 있어요.'}),
         ]
         for consent, expected in cases:
             with self.subTest(consent=consent):
