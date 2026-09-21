@@ -20,20 +20,10 @@ class OnboardingScreen extends StatelessWidget {
                 bottom: false,
                 child: Column(children: [
                   const Spacer(flex: 4),
-                  const BrandMark(size: 70),
-                  const SizedBox(height: 18),
-                  const Text.rich(
-                    TextSpan(children: [
-                      TextSpan(
-                          text: '이리',
-                          style: TextStyle(fontWeight: FontWeight.w800)),
-                      TextSpan(
-                          text: 'ON', style: TextStyle(color: AppColors.p4)),
-                    ]),
-                    style: TextStyle(
-                        color: Colors.white, fontSize: 28, letterSpacing: .5),
-                  ),
-                  const SizedBox(height: 22),
+                  // 앱 아이콘과 같은 로고. 로고에 "이리ON" 글자가 들어 있어 따로 쓰지 않는다.
+                  Image.asset('assets/brand/logo.png',
+                      width: 200, semanticLabel: '이리ON'),
+                  const SizedBox(height: 28),
                   const Text('사람 많은 땐, 이리ON\n가까운 대안을 켜드려요',
                       textAlign: TextAlign.center,
                       style: TextStyle(
