@@ -57,6 +57,8 @@ void main() {
       calls++;
       return ok();
     }));
+    expect(find.textContaining('계정 최종 파기 시 삭제됩니다'), findsOneWidget);
+    expect(find.textContaining('후기·사진과 일부 활동 데이터는'), findsNothing);
     await tester.ensureVisible(find.text('돌아가기'));
     await tester.tap(find.text('돌아가기'));
     await tester.pumpAndSettle();
@@ -181,7 +183,8 @@ void main() {
     await open(tester, const WithdrawalScreen(), MockClient((r) async => ok()));
     tester.view.physicalSize = const Size(1440, 1000);
     await tester.pumpAndSettle();
-    expect(find.textContaining('7일 후 계정이 삭제됩니다'), findsOneWidget);
+    expect(find.textContaining('7일 후 계정 파기 대상이 됩니다'), findsOneWidget);
+    expect(find.textContaining('계정 최종 파기 시 삭제됩니다'), findsOneWidget);
     await submitWithdrawal(tester);
     await tester.pumpAndSettle();
     expect(AppSession.instance.isAuthenticated, false);
