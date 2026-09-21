@@ -171,7 +171,9 @@ def main():
             '--bind', os.environ.get('HOST', '0.0.0.0') + ':' + os.environ.get('PORT', '8000'),
             '--workers', '1', '--threads', '4', '--timeout', '60',
             '--graceful-timeout', '20', '--worker-tmp-dir', '/tmp',
-            '--access-logfile', '-', '--error-logfile', '-',
+            # 접속 기록은 앞단 nginx가 남기고 처리방침의 기간으로 순환한다.
+            # 여기서도 남기면 도커 로그에 기간 없이 쌓이므로 오류 로그만 둔다.
+            '--error-logfile', '-',
         ]))
         while not stopping:
             if any(child.poll() is not None for child in children):

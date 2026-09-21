@@ -14,9 +14,9 @@ SUPPORT_PATH = '앱 > 마이 > 도움말 및 문의'
 TERMS_VERSION = '2026-09-21'
 EFFECTIVE_DATE = '2026년 9월 21일'
 
-# 서버(nginx)의 접속 로그 보관 기간. 서버 담당자 확인 전에는 비워 둔다.
-# 비어 있으면 /privacy 는 공개하지 않고 503 을 돌려준다.
-ACCESS_LOG_RETENTION = ''
+# 서버(nginx)의 접속 로그 보관 기간. 운영 서버 logrotate 설정(daily, rotate 14) 기준.
+# 설정이 바뀌면 이 값도 고친다. 비우면 /privacy 는 공개하지 않고 503 을 돌려준다.
+ACCESS_LOG_RETENTION = '최대 15일 (매일 새 파일로 바꾸고 14일치만 보관한 뒤 삭제)'
 
 # 배포 시 생기는 DB 백업의 보관 기간. runtime.prune_database_backups 와 문구가 같이 쓴다.
 DATABASE_BACKUP_RETENTION_DAYS = 30

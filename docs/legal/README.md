@@ -10,12 +10,13 @@
 
 | 페이지 | 템플릿 | 상태 |
 |---|---|---|
-| `/privacy` 개인정보 처리방침 | `tourist_congestion_backend/config/templates/config/privacy_policy.html` | 서버 접속 로그 보관 기간 확인 전에는 503 |
+| `/privacy` 개인정보 처리방침 | `tourist_congestion_backend/config/templates/config/privacy_policy.html` | 공개 가능. 접속 로그는 nginx logrotate(daily, rotate 14) 기준 최대 15일 |
 | `/terms` 서비스 이용약관 | `tourist_congestion_backend/config/templates/config/terms_of_service.html` | 공개 가능 |
 
 팀이 정한 값: 운영 주체 고사연일(대표·보호책임자 한도경, 팀장), 문의 ehrud8657@gmail.com, 앱 내 문의 경로
 "마이 > 도움말 및 문의", 서버는 팀원(hurdoo) 댁 라즈베리파이·팀원만 접근·위탁 없음, 가입은 만 14세 이상 본인 확인,
 DB 백업 30일, 문의·포인트는 계정 파기 시까지, 최근 본 장소 끄기는 다음 업데이트.
+접속 기록은 앞단 nginx에서만 남기고(최대 15일), 앱 서버(gunicorn)의 중복 접속 로그는 끈다.
 
 공개본에 맞춰 함께 구현한 것: 가입 시 만 14세 확인·약관 동의와 그 일시·버전 기록(`users.0008`),
 후기 삭제·사진 교체 시 이전 사진 파일 삭제, 배포 전 DB 백업 30일 자동 삭제(기동 시와 수집 워커에서 매분),
